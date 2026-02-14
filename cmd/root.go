@@ -20,6 +20,11 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// SetVersion sets the version string shown by --version.
+func SetVersion(v string) {
+	rootCmd.Version = v
+}
+
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

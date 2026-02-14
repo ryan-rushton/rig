@@ -1,0 +1,27 @@
+version: 2
+
+builds:
+  - main: .
+    binary: rig
+    ldflags:
+      - -s -w
+      - -X main.version={{.Tag}}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+changelog:
+  use: github
+  sort: asc
+
+release:
+  github:
+    owner: ryan-rushton
+    name: rig

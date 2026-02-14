@@ -5,14 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-go build -o ./bin/rig .   # build binary
-go run . [args]            # run without building
-go install .               # install to $GOPATH/bin
-go build ./...             # verify all packages compile
-go mod tidy                # sync dependencies
+go build ./...       # verify all packages compile
+go test ./...        # run all tests
+go run . [args]      # run without building
+go install .         # install to $GOPATH/bin
+go mod tidy          # sync dependencies
 ```
-
-There are no tests yet. When added, run them with `go test ./...`.
 
 ## Architecture
 
@@ -20,6 +18,8 @@ There are no tests yet. When added, run them with `go test ./...`.
 
 - `rig` — launches the home screen TUI where tools are listed and selected interactively
 - `rig <tool>` — launches a tool directly, bypassing the home screen
+
+CLI routing uses [cobra](https://github.com/spf13/cobra) (`cmd/` package). The version string is injected via `-ldflags` at build time (see `.goreleaser.yml`); it defaults to `"dev"` for local builds.
 
 ### Screen management
 
@@ -30,6 +30,12 @@ There are no tests yet. When added, run them with `go test ./...`.
 
 When a tool is launched directly via CLI (`cmd/gitbranch.go`), it is wrapped in `messages.Standalone(...)`, which converts `BackMsg` into `tea.Quit` instead of navigating.
 
+### Async git operations
+
+Tools that call git use Bubble Tea commands (async `tea.Cmd`) so the UI never blocks. A shared `startAsync` helper in the tool model sets up a ticker-driven spinner + elapsed timer (`s.ms` format). All git errors are shown in a dismissible splash overlay (`errSplash` field) rather than a separate error state — any keypress clears it and returns to browse.
+
+**Important:** `startAsync` must be a free function returning `(Model, tea.Cmd)`, not a pointer-receiver method. Using `return m, m.startAsync(...)` with a pointer receiver is a bug — Go evaluates the `m` copy before the pointer mutation runs.
+
 ### Adding a new tool
 
 1. Create `internal/tools/<name>/model.go` — implement `tea.Model`; send `messages.BackMsg{}` on quit/back
@@ -39,5 +45,11 @@ When a tool is launched directly via CLI (`cmd/gitbranch.go`), it is wrapped in 
 
 ### Shared packages
 
-- `internal/styles/` — lipgloss colour palette and reusable styles; use these rather than defining new colours inline
-- `internal/messages/` — shared message types; add new cross-tool messages here
+- `internal/styles/` — lipgloss color palette and reusable styles; use these rather than defining new colors inline
+- `internal/messages/` — shared message types and the `Standalone` wrapper
+
+## CI/CD
+
+- **CI** (`.github/workflows/ci.yml`): builds and tests on PRs and pushes to main
+- **Release** (`.github/workflows/release.yml`): on push to main, generates a CalVer tag (`YYYY.MM.DD`), creates a GitHub release with cross-compiled binaries via GoReleaser
+- **Dependabot** (`.github/dependabot.yml`): weekly updates for Go modules and GitHub Actions

@@ -90,19 +90,21 @@ func fetchBranches() tea.Msg {
 }
 
 // startAsync transitions into a waiting state, resets the timer, and
-// batches the git command with the ticker.
-func (m *Model) startAsync(state viewState, label string, cmd tea.Cmd) tea.Cmd {
+// batches the git command with the ticker. Returns the updated model
+// and batched command — must be used as: return startAsync(m, ...).
+func startAsync(m Model, state viewState, label string, cmd tea.Cmd) (Model, tea.Cmd) {
 	m.state = state
 	m.processingMsg = label
 	m.startedAt = time.Now()
 	m.spinnerFrame = 0
-	return tea.Batch(cmd, tick())
+	return m, tea.Batch(cmd, tick())
 }
 
 // showError keeps the model in stateBrowse but sets the splash message.
-func (m *Model) showError(err error) {
+func showError(m Model, err error) Model {
 	m.state = stateBrowse
 	m.errSplash = err.Error()
+	return m
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -124,7 +126,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case branchesLoadedMsg:
 		if msg.err != nil {
-			m.showError(msg.err)
+			m = showError(m, msg.err)
 		} else {
 			m.state = stateBrowse
 			m.branches = msg.branches
@@ -136,7 +138,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case renameResultMsg:
 		if msg.err != nil {
-			m.showError(msg.err)
+			m = showError(m, msg.err)
 		} else {
 			m.state = stateResult
 			lines := []string{
@@ -157,7 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case deleteResultMsg:
 		if msg.err != nil {
-			m.showError(msg.err)
+			m = showError(m, msg.err)
 		} else {
 			m.state = stateResult
 			m.result = styles.Success.Render("✓") + " Deleted " +
@@ -167,7 +169,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case createResultMsg:
 		if msg.err != nil {
-			m.showError(msg.err)
+			m = showError(m, msg.err)
 		} else {
 			m.state = stateResult
 			m.result = styles.Success.Render("✓") + " Created " +
@@ -177,11 +179,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case checkoutResultMsg:
 		if msg.err != nil {
-			m.showError(msg.err)
+			m = showError(m, msg.err)
 			return m, nil
 		}
 		// Reload so the current-branch indicator updates.
-		return m, m.startAsync(stateLoading, "Loading branches...", fetchBranches)
+		return startAsync(m, stateLoading, "Loading branches...", fetchBranches)
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -218,7 +220,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					break
 				}
 				m.editing = b
-				return m, m.startAsync(stateProcessing, "Switching branch...", m.cmdCheckout(b.Name))
+				return startAsync(m, stateProcessing, "Switching branch...", m.cmdCheckout(b.Name))
 			}
 		case "e":
 			if len(m.branches) > 0 {
@@ -243,12 +245,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.deleteStaged && m.deleteStagedIdx == m.cursor {
 				m.editing = b
 				m.deleteStaged = false
-				return m, m.startAsync(stateProcessing, "Deleting branch...", m.cmdDelete(b.Name))
+				return startAsync(m, stateProcessing, "Deleting branch...", m.cmdDelete(b.Name))
 			}
 			m.deleteStaged = true
 			m.deleteStagedIdx = m.cursor
 		case "r":
-			return m, m.startAsync(stateLoading, "Loading branches...", fetchBranches)
+			return startAsync(m, stateLoading, "Loading branches...", fetchBranches)
 		}
 
 	case stateEdit:
@@ -271,7 +273,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.confirmIdx = 0
 				return m, nil
 			}
-			return m, m.startAsync(stateProcessing, "Renaming branch...", m.cmdRenameLocal(newName))
+			return startAsync(m, stateProcessing, "Renaming branch...", m.cmdRenameLocal(newName))
 		default:
 			var inputCmd tea.Cmd
 			m.input, inputCmd = m.input.Update(msg)
@@ -291,7 +293,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if newName == "" || m.branchExists(newName) {
 				return m, nil
 			}
-			return m, m.startAsync(stateProcessing, "Creating branch...", m.cmdCreate(newName))
+			return startAsync(m, stateProcessing, "Creating branch...", m.cmdCreate(newName))
 		default:
 			var inputCmd tea.Cmd
 			m.input, inputCmd = m.input.Update(msg)
@@ -312,19 +314,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "y":
 			newName := strings.TrimSpace(m.input.Value())
 			m.didRemote = true
-			return m, m.startAsync(stateProcessing, "Renaming branch...", m.cmdRenameAll(newName))
+			return startAsync(m, stateProcessing, "Renaming branch...", m.cmdRenameAll(newName))
 		case "n":
 			newName := strings.TrimSpace(m.input.Value())
 			m.didRemote = false
-			return m, m.startAsync(stateProcessing, "Renaming branch...", m.cmdRenameLocal(newName))
+			return startAsync(m, stateProcessing, "Renaming branch...", m.cmdRenameLocal(newName))
 		case "enter", " ":
 			newName := strings.TrimSpace(m.input.Value())
 			if m.confirmIdx == 0 {
 				m.didRemote = true
-				return m, m.startAsync(stateProcessing, "Renaming branch...", m.cmdRenameAll(newName))
+				return startAsync(m, stateProcessing, "Renaming branch...", m.cmdRenameAll(newName))
 			}
 			m.didRemote = false
-			return m, m.startAsync(stateProcessing, "Renaming branch...", m.cmdRenameLocal(newName))
+			return startAsync(m, stateProcessing, "Renaming branch...", m.cmdRenameLocal(newName))
 		}
 
 	case stateResult:
@@ -335,7 +337,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return messages.BackMsg{} }
 		default:
 			m.cursor = 0
-			return m, m.startAsync(stateLoading, "Loading branches...", fetchBranches)
+			return startAsync(m, stateLoading, "Loading branches...", fetchBranches)
 		}
 	}
 
