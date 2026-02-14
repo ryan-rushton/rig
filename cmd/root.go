@@ -12,7 +12,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "rig",
-	Short: "Ryan's TUI toolkit",
+	Short: "Ryan's Jig TUI toolkit",
 	Long:  "rig - a personal TUI toolkit for custom workflows and tools",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		p := tea.NewProgram(app.New(), tea.WithAltScreen())

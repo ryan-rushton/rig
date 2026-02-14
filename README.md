@@ -46,16 +46,16 @@ rig git-branch   # also: rig gb
 
 Interactive git branch manager — checkout, rename, create, and delete branches.
 
-| Key | Action |
-|-----|--------|
-| `j` / `↓` | Move down |
-| `k` / `↑` | Move up |
-| `enter` | Checkout selected branch |
-| `e` | Rename selected branch |
-| `c` | Create a new branch |
-| `dd` | Delete branch (first `d` stages, second confirms) |
-| `r` | Refresh branch list |
-| `esc` / `q` | Back / quit |
+| Key         | Action                                            |
+| ----------- | ------------------------------------------------- |
+| `j` / `↓`   | Move down                                         |
+| `k` / `↑`   | Move up                                           |
+| `enter`     | Checkout selected branch                          |
+| `e`         | Rename selected branch                            |
+| `c`         | Create a new branch                               |
+| `dd`        | Delete branch (first `d` stages, second confirms) |
+| `r`         | Refresh branch list                               |
+| `esc` / `q` | Back / quit                                       |
 
 When renaming a branch that has a remote tracking branch, you'll be prompted whether to also rename it on the remote. Git errors (e.g. uncommitted changes blocking a checkout) are shown in a dismissible splash.
 
