@@ -6,7 +6,8 @@
       "Bash(goimports:*)",
       "Bash(golangci-lint run:*)",
       "Bash(go install:*)",
-      "Bash(golangci-lint version:*)"
+      "Bash(golangci-lint version:*)",
+      "Bash(go mod tidy:*)"
     ]
   }
 }
