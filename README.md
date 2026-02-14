@@ -1,2 +1,63 @@
 # rig
-Personal terminal application for my own dev-x
+
+**Ryan's jig** — a personal TUI toolkit for custom dev workflows, built with Go and [Charm](https://charm.sh/).
+
+## Install
+
+Download a binary from the [latest release](https://github.com/ryan-rushton/rig/releases/latest), or install from source:
+
+```bash
+go install github.com/ryan-rushton/rig@latest
+```
+
+Check your version:
+
+```bash
+rig --version
+```
+
+## Usage
+
+Launch the home screen and pick a tool interactively:
+
+```bash
+rig
+```
+
+Or run a tool directly:
+
+```bash
+rig git-branch   # also: rig gb
+```
+
+## Tools
+
+### `git-branch` / `gb`
+
+Interactive git branch manager — checkout, rename, create, and delete branches.
+
+| Key | Action |
+|-----|--------|
+| `j` / `↓` | Move down |
+| `k` / `↑` | Move up |
+| `enter` | Checkout selected branch |
+| `e` | Rename selected branch |
+| `c` | Create a new branch |
+| `dd` | Delete branch (first `d` stages, second confirms) |
+| `r` | Refresh branch list |
+| `esc` / `q` | Back / quit |
+
+When renaming a branch that has a remote tracking branch, you'll be prompted whether to also rename it on the remote. Git errors (e.g. uncommitted changes blocking a checkout) are shown in a dismissible splash.
+
+## Development
+
+```bash
+go run .            # run home screen
+go run . gb         # run a tool directly
+go build ./...      # verify all packages compile
+go test ./...       # run tests
+```
+
+Releases use [CalVer](https://calver.org/) (`YYYY.MM.DD`) and are published automatically on every push to main via GoReleaser. Binaries are built for darwin and linux (amd64 + arm64).
+
+See [CLAUDE.md](./CLAUDE.md) for architecture notes and instructions on adding new tools.

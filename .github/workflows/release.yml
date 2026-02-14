@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Generate CalVer tag
+        id: version
+        run: |
+          DATE_TAG=$(date -u +%Y.%m.%d)
+          # Check if this date tag already exists, append sequence if so.
+          EXISTING=$(git tag -l "${DATE_TAG}.*" | sort -t. -k4 -n | tail -1)
+          if git rev-parse "${DATE_TAG}" >/dev/null 2>&1; then
+            if [ -n "$EXISTING" ]; then
+              SEQ=$(echo "$EXISTING" | awk -F. '{print $4}')
+              DATE_TAG="${DATE_TAG}.$((SEQ + 1))"
+            else
+              DATE_TAG="${DATE_TAG}.2"
+            fi
+          fi
+          echo "tag=${DATE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
