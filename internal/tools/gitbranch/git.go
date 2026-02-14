@@ -54,6 +54,36 @@ func renameBranch(oldName, newName string) error {
 	return nil
 }
 
+func checkoutBranch(name string) error {
+	var buf bytes.Buffer
+	cmd := exec.Command("git", "switch", name)
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(buf.String()))
+	}
+	return nil
+}
+
+func deleteBranch(name string) error {
+	var buf bytes.Buffer
+	cmd := exec.Command("git", "branch", "-D", name)
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("delete branch: %s", strings.TrimSpace(buf.String()))
+	}
+	return nil
+}
+
+func createBranch(name string) error {
+	var buf bytes.Buffer
+	cmd := exec.Command("git", "branch", name)
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("create branch: %s", strings.TrimSpace(buf.String()))
+	}
+	return nil
+}
+
 func renameRemoteBranch(remoteName, oldBranch, newBranch string) error {
 	var buf bytes.Buffer
 

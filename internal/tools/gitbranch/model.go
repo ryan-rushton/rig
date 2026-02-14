@@ -3,6 +3,7 @@ package gitbranch
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,11 +18,21 @@ const (
 	stateLoading viewState = iota
 	stateBrowse
 	stateEdit
+	stateCreate
 	stateConfirmRemote
 	stateProcessing
 	stateResult
-	stateError
 )
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+type tickMsg time.Time
+
+func tick() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
 
 type branchesLoadedMsg struct {
 	branches []Branch
@@ -34,17 +45,27 @@ type renameResultMsg struct {
 	err      error
 }
 
+type deleteResultMsg struct{ err error }
+type createResultMsg struct{ err error }
+type checkoutResultMsg struct{ err error }
+
 // Model is the git branch editor TUI model.
 type Model struct {
-	state      viewState
-	branches   []Branch
-	cursor     int
-	input      textinput.Model
-	editing    Branch
-	didRemote  bool
-	result     string
-	errMsg     string
-	confirmIdx int // 0 = yes, 1 = no
+	state         viewState
+	branches      []Branch
+	cursor        int
+	input         textinput.Model
+	editing       Branch
+	didRemote     bool
+	result        string
+	errSplash     string // non-empty = show error splash; any key dismisses it
+	confirmIdx    int    // 0 = yes, 1 = no
+	startedAt     time.Time
+	spinnerFrame  int
+	processingMsg string
+	// delete staging — first d marks, second d confirms
+	deleteStaged    bool
+	deleteStagedIdx int
 }
 
 func New() Model {
@@ -53,13 +74,14 @@ func New() Model {
 	ti.Width = 50
 
 	return Model{
-		state: stateLoading,
-		input: ti,
+		state:     stateLoading,
+		input:     ti,
+		startedAt: time.Now(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return fetchBranches
+	return tea.Batch(fetchBranches, tick())
 }
 
 func fetchBranches() tea.Msg {
@@ -67,12 +89,42 @@ func fetchBranches() tea.Msg {
 	return branchesLoadedMsg{branches: branches, err: err}
 }
 
+// startAsync transitions into a waiting state, resets the timer, and
+// batches the git command with the ticker.
+func (m *Model) startAsync(state viewState, label string, cmd tea.Cmd) tea.Cmd {
+	m.state = state
+	m.processingMsg = label
+	m.startedAt = time.Now()
+	m.spinnerFrame = 0
+	return tea.Batch(cmd, tick())
+}
+
+// showError keeps the model in stateBrowse but sets the splash message.
+func (m *Model) showError(err error) {
+	m.state = stateBrowse
+	m.errSplash = err.Error()
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Error splash intercepts all key presses and clears itself.
+	if m.errSplash != "" {
+		if _, ok := msg.(tea.KeyMsg); ok {
+			m.errSplash = ""
+			return m, nil
+		}
+	}
+
 	switch msg := msg.(type) {
+	case tickMsg:
+		if m.state == stateLoading || m.state == stateProcessing {
+			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
+			return m, tick()
+		}
+		return m, nil
+
 	case branchesLoadedMsg:
 		if msg.err != nil {
-			m.state = stateError
-			m.errMsg = msg.err.Error()
+			m.showError(msg.err)
 		} else {
 			m.state = stateBrowse
 			m.branches = msg.branches
@@ -84,8 +136,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case renameResultMsg:
 		if msg.err != nil {
-			m.state = stateError
-			m.errMsg = msg.err.Error()
+			m.showError(msg.err)
 		} else {
 			m.state = stateResult
 			lines := []string{
@@ -104,6 +155,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case deleteResultMsg:
+		if msg.err != nil {
+			m.showError(msg.err)
+		} else {
+			m.state = stateResult
+			m.result = styles.Success.Render("✓") + " Deleted " +
+				styles.Dimmed.Render(m.editing.Name)
+		}
+		return m, nil
+
+	case createResultMsg:
+		if msg.err != nil {
+			m.showError(msg.err)
+		} else {
+			m.state = stateResult
+			m.result = styles.Success.Render("✓") + " Created " +
+				styles.Selected.Render(m.input.Value())
+		}
+		return m, nil
+
+	case checkoutResultMsg:
+		if msg.err != nil {
+			m.showError(msg.err)
+			return m, nil
+		}
+		// Reload so the current-branch indicator updates.
+		return m, m.startAsync(stateLoading, "Loading branches...", fetchBranches)
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -114,6 +193,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case stateBrowse:
+		// Any key other than d clears delete staging.
+		if msg.String() != "d" {
+			m.deleteStaged = false
+		}
+
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -127,7 +211,16 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.cursor < len(m.branches)-1 {
 				m.cursor++
 			}
-		case "enter", "e":
+		case "enter":
+			if len(m.branches) > 0 {
+				b := m.branches[m.cursor]
+				if b.IsCurrent {
+					break
+				}
+				m.editing = b
+				return m, m.startAsync(stateProcessing, "Switching branch...", m.cmdCheckout(b.Name))
+			}
+		case "e":
 			if len(m.branches) > 0 {
 				m.editing = m.branches[m.cursor]
 				m.input.SetValue(m.editing.Name)
@@ -135,9 +228,27 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.input.CursorEnd()
 				m.state = stateEdit
 			}
+		case "c":
+			m.input.SetValue("")
+			m.input.Focus()
+			m.state = stateCreate
+		case "d":
+			if len(m.branches) == 0 {
+				break
+			}
+			b := m.branches[m.cursor]
+			if b.IsCurrent {
+				break
+			}
+			if m.deleteStaged && m.deleteStagedIdx == m.cursor {
+				m.editing = b
+				m.deleteStaged = false
+				return m, m.startAsync(stateProcessing, "Deleting branch...", m.cmdDelete(b.Name))
+			}
+			m.deleteStaged = true
+			m.deleteStagedIdx = m.cursor
 		case "r":
-			m.state = stateLoading
-			return m, fetchBranches
+			return m, m.startAsync(stateLoading, "Loading branches...", fetchBranches)
 		}
 
 	case stateEdit:
@@ -160,8 +271,27 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.confirmIdx = 0
 				return m, nil
 			}
-			m.state = stateProcessing
-			return m, m.cmdRenameLocal(newName)
+			return m, m.startAsync(stateProcessing, "Renaming branch...", m.cmdRenameLocal(newName))
+		default:
+			var inputCmd tea.Cmd
+			m.input, inputCmd = m.input.Update(msg)
+			return m, inputCmd
+		}
+
+	case stateCreate:
+		switch msg.String() {
+		case "ctrl+c":
+			return m, tea.Quit
+		case "esc":
+			m.state = stateBrowse
+			m.input.Blur()
+			return m, nil
+		case "enter":
+			newName := strings.TrimSpace(m.input.Value())
+			if newName == "" || m.branchExists(newName) {
+				return m, nil
+			}
+			return m, m.startAsync(stateProcessing, "Creating branch...", m.cmdCreate(newName))
 		default:
 			var inputCmd tea.Cmd
 			m.input, inputCmd = m.input.Update(msg)
@@ -180,39 +310,51 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "right", "l", "tab":
 			m.confirmIdx = 1
 		case "y":
+			newName := strings.TrimSpace(m.input.Value())
 			m.didRemote = true
-			m.state = stateProcessing
-			return m, m.cmdRenameAll(strings.TrimSpace(m.input.Value()))
+			return m, m.startAsync(stateProcessing, "Renaming branch...", m.cmdRenameAll(newName))
 		case "n":
+			newName := strings.TrimSpace(m.input.Value())
 			m.didRemote = false
-			m.state = stateProcessing
-			return m, m.cmdRenameLocal(strings.TrimSpace(m.input.Value()))
+			return m, m.startAsync(stateProcessing, "Renaming branch...", m.cmdRenameLocal(newName))
 		case "enter", " ":
 			newName := strings.TrimSpace(m.input.Value())
 			if m.confirmIdx == 0 {
 				m.didRemote = true
-				m.state = stateProcessing
-				return m, m.cmdRenameAll(newName)
+				return m, m.startAsync(stateProcessing, "Renaming branch...", m.cmdRenameAll(newName))
 			}
 			m.didRemote = false
-			m.state = stateProcessing
-			return m, m.cmdRenameLocal(newName)
+			return m, m.startAsync(stateProcessing, "Renaming branch...", m.cmdRenameLocal(newName))
 		}
 
-	case stateResult, stateError:
+	case stateResult:
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
 		case "q", "esc":
 			return m, func() tea.Msg { return messages.BackMsg{} }
 		default:
-			m.state = stateLoading
 			m.cursor = 0
-			return m, fetchBranches
+			return m, m.startAsync(stateLoading, "Loading branches...", fetchBranches)
 		}
 	}
 
 	return m, nil
+}
+
+func (m Model) branchExists(name string) bool {
+	for _, b := range m.branches {
+		if b.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (m Model) cmdCheckout(name string) tea.Cmd {
+	return func() tea.Msg {
+		return checkoutResultMsg{err: checkoutBranch(name)}
+	}
 }
 
 func (m Model) cmdRenameLocal(newName string) tea.Cmd {
@@ -236,6 +378,18 @@ func (m Model) cmdRenameAll(newName string) tea.Cmd {
 	}
 }
 
+func (m Model) cmdDelete(name string) tea.Cmd {
+	return func() tea.Msg {
+		return deleteResultMsg{err: deleteBranch(name)}
+	}
+}
+
+func (m Model) cmdCreate(name string) tea.Cmd {
+	return func() tea.Msg {
+		return createResultMsg{err: createBranch(name)}
+	}
+}
+
 // splitUpstream splits "origin/feature/foo" into ("origin", "feature/foo").
 func splitUpstream(upstream string) (remote, branch string) {
 	idx := strings.Index(upstream, "/")
@@ -245,12 +399,28 @@ func splitUpstream(upstream string) (remote, branch string) {
 	return upstream[:idx], upstream[idx+1:]
 }
 
+func (m Model) elapsed() string {
+	return fmt.Sprintf("%.2fs", time.Since(m.startedAt).Seconds())
+}
+
 func (m Model) View() string {
+	// Error splash takes over the whole view; any key will clear it.
+	if m.errSplash != "" {
+		content := styles.Title.Render("Error") + "\n\n"
+		content += styles.Err.Render(m.errSplash) + "\n"
+		content += "\n" + styles.Help.Render("any key to dismiss")
+		return styles.Box.
+			BorderForeground(styles.Red).
+			Render(content)
+	}
+
 	var content string
 
 	switch m.state {
 	case stateLoading:
-		content = styles.Dimmed.Render("Loading branches...")
+		spinner := styles.Selected.Render(spinnerFrames[m.spinnerFrame])
+		content = spinner + " " + styles.Dimmed.Render(m.processingMsg) +
+			"  " + styles.Subtitle.Render(m.elapsed())
 
 	case stateBrowse:
 		content = styles.Title.Render("Git Branch Manager") + "\n\n"
@@ -275,27 +445,53 @@ func (m Model) View() string {
 					prefix = styles.CurrentBranch.Render("* ")
 				}
 
+				deleteMarker := ""
+				if m.deleteStaged && m.deleteStagedIdx == i {
+					deleteMarker = "  " + styles.Err.Render("d again to delete")
+					nameStyle = styles.Err
+					if i == m.cursor {
+						cursor = styles.Err.Render("> ")
+					}
+				}
+
 				remote := ""
-				if b.HasRemote {
+				if b.HasRemote && deleteMarker == "" {
 					remote = "  " + styles.Remote.Render("["+b.Upstream+"]")
 				}
 
-				content += fmt.Sprintf("%s%s%s%s\n",
+				content += fmt.Sprintf("%s%s%s%s%s\n",
 					cursor,
 					prefix,
 					nameStyle.Render(fmt.Sprintf("%-40s", b.Name)),
 					remote,
+					deleteMarker,
 				)
 			}
 		}
 
-		content += "\n" + styles.Help.Render("↑↓/jk navigate  e/enter rename  r refresh  esc/q back")
+		content += "\n" + styles.Help.Render("enter checkout  e rename  c create  dd delete  r refresh  esc/q back")
 
 	case stateEdit:
 		content = styles.Title.Render("Rename Branch") + "\n\n"
 		content += styles.Dimmed.Render("Old: ") + styles.Subtitle.Render(m.editing.Name) + "\n"
 		content += styles.Dimmed.Render("New: ") + m.input.View() + "\n"
 		content += "\n" + styles.Help.Render("enter confirm  esc cancel")
+
+	case stateCreate:
+		newName := m.input.Value()
+		content = styles.Title.Render("New Branch") + "\n\n"
+		content += styles.Dimmed.Render("Name: ") + m.input.View() + "\n\n"
+
+		switch {
+		case newName == "":
+			content += styles.Dimmed.Render("enter a branch name")
+		case m.branchExists(newName):
+			content += styles.Err.Render("✗ branch already exists")
+		default:
+			content += styles.Success.Render("✓ name available")
+		}
+
+		content += "\n\n" + styles.Help.Render("enter create  esc cancel")
 
 	case stateConfirmRemote:
 		newName := strings.TrimSpace(m.input.Value())
@@ -322,17 +518,14 @@ func (m Model) View() string {
 		content += "\n" + styles.Help.Render("←→/hl select  enter confirm  y/n shortcut  esc cancel")
 
 	case stateProcessing:
-		content = styles.Dimmed.Render("Renaming branch...")
+		spinner := styles.Selected.Render(spinnerFrames[m.spinnerFrame])
+		content = spinner + " " + styles.Dimmed.Render(m.processingMsg) +
+			"  " + styles.Subtitle.Render(m.elapsed())
 
 	case stateResult:
 		content = styles.Title.Render("Done") + "\n\n"
 		content += m.result + "\n"
 		content += "\n" + styles.Help.Render("any key to refresh  esc/q back")
-
-	case stateError:
-		content = styles.Title.Render("Error") + "\n\n"
-		content += styles.Err.Render(m.errMsg) + "\n"
-		content += "\n" + styles.Help.Render("any key to retry  esc/q back")
 	}
 
 	return styles.Box.Render(content)
