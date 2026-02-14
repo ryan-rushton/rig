@@ -38,18 +38,21 @@ jobs:
         if: steps.changes.outputs.release == 'true'
         id: version
         run: |
-          DATE_TAG=$(date -u +%Y.%m.%d)
-          # Check if this date tag already exists, append sequence if so.
-          EXISTING=$(git tag -l "${DATE_TAG}.*" | sort -t. -k4 -n | tail -1)
-          if git rev-parse "${DATE_TAG}" >/dev/null 2>&1; then
-            if [ -n "$EXISTING" ]; then
-              SEQ=$(echo "$EXISTING" | awk -F. '{print $4}')
-              DATE_TAG="${DATE_TAG}.$((SEQ + 1))"
-            else
-              DATE_TAG="${DATE_TAG}.2"
-            fi
+          # Semver-compatible CalVer: YYYY.M.D (no leading zeros).
+          YEAR=$(date -u +%Y)
+          MONTH=$(date -u +%-m)
+          DAY=$(date -u +%-d)
+          BASE="${YEAR}.${MONTH}.${DAY}"
+
+          # If this date already has a tag, append a pre-release sequence.
+          if git rev-parse "${BASE}" >/dev/null 2>&1; then
+            LAST=$(git tag -l "${BASE}-*" | sed "s/${BASE}-//" | sort -n | tail -1)
+            SEQ=$(( ${LAST:-1} + 1 ))
+            TAG="${BASE}-${SEQ}"
+          else
+            TAG="${BASE}"
           fi
-          echo "tag=${DATE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
         if: steps.changes.outputs.release == 'true'
