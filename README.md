@@ -4,7 +4,17 @@
 
 ## Install
 
-Download a binary from the [latest release](https://github.com/ryan-rushton/rig/releases/latest), or install from source:
+```bash
+curl -fsSL https://raw.githubusercontent.com/ryan-rushton/rig/main/install.sh | sh
+```
+
+This downloads the latest release binary to `~/.local/bin`. Override the location with `INSTALL_DIR`:
+
+```bash
+INSTALL_DIR=/usr/local/bin sh install.sh
+```
+
+Or install from source:
 
 ```bash
 go install github.com/ryan-rushton/rig@latest
