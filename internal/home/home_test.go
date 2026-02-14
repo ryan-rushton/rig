@@ -4,10 +4,11 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ryan-rushton/rig/internal/messages"
 )
 
-func key(r rune) tea.KeyMsg      { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
+func key(r rune) tea.KeyMsg            { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
 func keyType(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
 
 func TestNavigation_BoundsChecking(t *testing.T) {

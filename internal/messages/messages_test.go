@@ -12,9 +12,9 @@ type mockModel struct {
 	viewString string
 }
 
-func (m mockModel) Init() tea.Cmd                         { return nil }
+func (m mockModel) Init() tea.Cmd                           { return nil }
 func (m mockModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { m.lastMsg = msg; return m, nil }
-func (m mockModel) View() string                          { return m.viewString }
+func (m mockModel) View() string                            { return m.viewString }
 
 func TestStandalone_BackMsg_Quits(t *testing.T) {
 	inner := mockModel{viewString: "inner"}

@@ -5,12 +5,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-go build ./...       # verify all packages compile
-go test ./...        # run all tests
-go run . [args]      # run without building
-go install .         # install to $GOPATH/bin
-go mod tidy          # sync dependencies
+go build ./...             # verify all packages compile
+go test ./...              # run all tests
+golangci-lint run ./...    # lint (v2, config in .golangci.yml)
+go run . [args]            # run without building
+go install .               # install to $GOPATH/bin
+go mod tidy                # sync dependencies
 ```
+
+Imports are formatted with `goimports` using `github.com/ryan-rushton/rig` as the local prefix (three groups: stdlib, third-party, local). VS Code is configured to run this on save.
 
 ## Architecture
 

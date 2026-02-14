@@ -5,8 +5,9 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/ryan-rushton/rig/internal/app"
 	"github.com/spf13/cobra"
+
+	"github.com/ryan-rushton/rig/internal/app"
 )
 
 var rootCmd = &cobra.Command{

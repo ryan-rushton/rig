@@ -14,11 +14,11 @@ var (
 		Foreground(Purple)
 
 	Subtitle = lipgloss.NewStyle().
-		Foreground(Gray)
+			Foreground(Gray)
 
 	Selected = lipgloss.NewStyle().
-		Foreground(Purple).
-		Bold(true)
+			Foreground(Purple).
+			Bold(true)
 
 	Dimmed = lipgloss.NewStyle().
 		Foreground(DimGray)
@@ -34,8 +34,8 @@ var (
 		Italic(true)
 
 	CurrentBranch = lipgloss.NewStyle().
-		Foreground(Green).
-		Bold(true)
+			Foreground(Green).
+			Bold(true)
 
 	Remote = lipgloss.NewStyle().
 		Foreground(Gray)

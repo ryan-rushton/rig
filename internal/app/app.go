@@ -2,6 +2,7 @@ package app
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ryan-rushton/rig/internal/home"
 	"github.com/ryan-rushton/rig/internal/messages"
 	"github.com/ryan-rushton/rig/internal/tools/gitbranch"
@@ -28,8 +29,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, h.Init()
 
 	case messages.ToolSelectedMsg:
-		switch msg.ID {
-		case "git-branch":
+		if msg.ID == "git-branch" {
 			gb := gitbranch.New()
 			m.current = gb
 			return m, gb.Init()

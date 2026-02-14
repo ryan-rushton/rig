@@ -1,0 +1,29 @@
+version: "2"
+
+formatters:
+  enable:
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/ryan-rushton/rig
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gocritic
+    - misspell
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        # Bubble Tea requires value receivers on tea.Model, producing large copies by design.
+        - hugeParam
+        # Inline comments explaining test data trigger false positives.
+        - commentedOutCode

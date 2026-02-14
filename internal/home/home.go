@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/ryan-rushton/rig/internal/messages"
 	"github.com/ryan-rushton/rig/internal/styles"
 )
@@ -37,24 +38,26 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down", "j":
-			if m.cursor < len(tools)-1 {
-				m.cursor++
-			}
-		case "enter", " ":
-			selected := tools[m.cursor]
-			return m, func() tea.Msg {
-				return messages.ToolSelectedMsg{ID: selected.ID}
-			}
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+
+	switch keyMsg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < len(tools)-1 {
+			m.cursor++
+		}
+	case "enter", " ":
+		selected := tools[m.cursor]
+		return m, func() tea.Msg {
+			return messages.ToolSelectedMsg{ID: selected.ID}
 		}
 	}
 	return m, nil

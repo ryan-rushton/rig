@@ -5,11 +5,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ryan-rushton/rig/internal/messages"
 )
 
 // Key helpers to keep tests readable.
-func key(r rune) tea.KeyMsg      { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
+func key(r rune) tea.KeyMsg            { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
 func keyType(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
 
 // modelWithBranches returns a Model in stateBrowse with the supplied branches.

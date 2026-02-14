@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(go build:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(goimports:*)",
+      "Bash(golangci-lint run:*)",
+      "Bash(go install:*)",
+      "Bash(golangci-lint version:*)"
     ]
   }
 }
