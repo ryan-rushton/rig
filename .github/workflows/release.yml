@@ -1,13 +1,10 @@
 name: Release
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths:
-      - "**.go"
-      - go.mod
-      - go.sum
-      - .goreleaser.yml
 
 permissions:
   contents: write
@@ -15,6 +12,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -24,7 +24,18 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Check for Go changes
+        id: changes
+        run: |
+          PREV_SHA=${{ github.event.workflow_run.head_commit.id }}~1
+          if git diff --name-only "$PREV_SHA" HEAD | grep -qE '\.go$|^go\.(mod|sum)$|\.goreleaser\.yml$'; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Generate CalVer tag
+        if: steps.changes.outputs.release == 'true'
         id: version
         run: |
           DATE_TAG=$(date -u +%Y.%m.%d)
@@ -41,11 +52,13 @@ jobs:
           echo "tag=${DATE_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
+        if: steps.changes.outputs.release == 'true'
         run: |
           git tag ${{ steps.version.outputs.tag }}
           git push origin ${{ steps.version.outputs.tag }}
 
       - name: Run GoReleaser
+        if: steps.changes.outputs.release == 'true'
         uses: goreleaser/goreleaser-action@v6
         with:
           version: '~> v2'
