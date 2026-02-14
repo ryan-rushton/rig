@@ -1,5 +1,10 @@
 version: 2
 
+# CalVer tags (YYYY.MM.DD) are not semver.
+git:
+  tag_sort: -creatordate
+  no_strict_semver: true
+
 builds:
   - main: .
     binary: rig
