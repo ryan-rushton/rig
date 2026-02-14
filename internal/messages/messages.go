@@ -10,6 +10,16 @@ type ToolSelectedMsg struct {
 	ID string
 }
 
+// UpdateAvailableMsg is sent when a background check finds a newer release.
+type UpdateAvailableMsg struct {
+	Tag string
+}
+
+// UpdateFinishedMsg is sent when an update download completes (or fails).
+type UpdateFinishedMsg struct {
+	Err error
+}
+
 // standalone wraps a tool model so that BackMsg causes a quit instead of
 // navigating back — used when a tool is launched directly via CLI.
 type standalone struct {

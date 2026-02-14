@@ -9,14 +9,14 @@ import (
 )
 
 func TestNew_StartsWithHomeScreen(t *testing.T) {
-	m := New()
+	m := New("dev")
 	if _, ok := m.current.(home.Model); !ok {
 		t.Errorf("expected home.Model as initial screen, got %T", m.current)
 	}
 }
 
 func TestToolSelected_SwitchesToGitBranch(t *testing.T) {
-	m := New()
+	m := New("dev")
 	result, cmd := m.Update(messages.ToolSelectedMsg{ID: "git-branch"})
 	got := result.(Model)
 
@@ -29,7 +29,7 @@ func TestToolSelected_SwitchesToGitBranch(t *testing.T) {
 }
 
 func TestToolSelected_UnknownID_NoTransition(t *testing.T) {
-	m := New()
+	m := New("dev")
 	result, _ := m.Update(messages.ToolSelectedMsg{ID: "nonexistent"})
 	got := result.(Model)
 
@@ -39,7 +39,7 @@ func TestToolSelected_UnknownID_NoTransition(t *testing.T) {
 }
 
 func TestBackMsg_ReturnsToHome(t *testing.T) {
-	m := New()
+	m := New("dev")
 	// First navigate to a tool.
 	r, _ := m.Update(messages.ToolSelectedMsg{ID: "git-branch"})
 	m = r.(Model)

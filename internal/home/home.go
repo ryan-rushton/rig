@@ -8,6 +8,7 @@ import (
 
 	"github.com/ryan-rushton/rig/internal/messages"
 	"github.com/ryan-rushton/rig/internal/styles"
+	"github.com/ryan-rushton/rig/internal/updater"
 )
 
 type tool struct {
@@ -26,38 +27,80 @@ var tools = []tool{
 
 // Model is the home screen model.
 type Model struct {
-	cursor int
+	cursor    int
+	version   string
+	updateTag string
+	updating  bool
+	updated   bool
+	updateErr string
 }
 
-func New() Model {
-	return Model{}
+func New(version string) Model {
+	return Model{version: version}
+}
+
+func checkForUpdate(version string) tea.Cmd {
+	return func() tea.Msg {
+		latest, err := updater.LatestRelease()
+		if err != nil || !updater.IsNewer(version, latest) {
+			return nil
+		}
+		return messages.UpdateAvailableMsg{Tag: latest}
+	}
+}
+
+func runUpdate(tag string) tea.Cmd {
+	return func() tea.Msg {
+		err := updater.DownloadAndReplace(tag)
+		return messages.UpdateFinishedMsg{Err: err}
+	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	if m.version == "dev" {
+		return nil
+	}
+	return checkForUpdate(m.version)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	keyMsg, ok := msg.(tea.KeyMsg)
-	if !ok {
+	switch msg := msg.(type) {
+	case messages.UpdateAvailableMsg:
+		m.updateTag = msg.Tag
 		return m, nil
-	}
 
-	switch keyMsg.String() {
-	case "ctrl+c", "q":
-		return m, tea.Quit
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
+	case messages.UpdateFinishedMsg:
+		m.updating = false
+		if msg.Err != nil {
+			m.updateErr = msg.Err.Error()
+		} else {
+			m.updated = true
 		}
-	case "down", "j":
-		if m.cursor < len(tools)-1 {
-			m.cursor++
+		return m, nil
+
+	case tea.KeyMsg:
+		if msg.String() == "u" && m.updateTag != "" && !m.updating && !m.updated {
+			m.updating = true
+			m.updateErr = ""
+			return m, runUpdate(m.updateTag)
 		}
-	case "enter", " ":
-		selected := tools[m.cursor]
-		return m, func() tea.Msg {
-			return messages.ToolSelectedMsg{ID: selected.ID}
+
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return m, tea.Quit
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(tools)-1 {
+				m.cursor++
+			}
+		case "enter", " ":
+			selected := tools[m.cursor]
+			return m, func() tea.Msg {
+				return messages.ToolSelectedMsg{ID: selected.ID}
+			}
 		}
 	}
 	return m, nil
@@ -66,6 +109,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	content := styles.Title.Render("rig") + "\n"
 	content += styles.Subtitle.Render("Ryan's TUI Toolkit") + "\n\n"
+
+	// Update banner
+	switch {
+	case m.updateErr != "":
+		content += styles.Err.Render(fmt.Sprintf("Update failed: %s", m.updateErr)) + "\n\n"
+	case m.updated:
+		content += styles.Success.Render(fmt.Sprintf("Updated! Restart rig to use %s", m.updateTag)) + "\n\n"
+	case m.updating:
+		content += styles.UpdateBanner.Render(fmt.Sprintf("Updating to %s...", m.updateTag)) + "\n\n"
+	case m.updateTag != "":
+		content += styles.UpdateBanner.Render(
+			fmt.Sprintf("Update available: %s (press u to update)", m.updateTag),
+		) + "\n\n"
+	}
 
 	for i, t := range tools {
 		cursor := "  "
@@ -85,7 +142,11 @@ func (m Model) View() string {
 		)
 	}
 
-	content += "\n" + styles.Help.Render("↑↓/jk navigate  enter select  q quit")
+	helpText := "↑↓/jk navigate  enter select  q quit"
+	if m.updateTag != "" && !m.updating && !m.updated {
+		helpText = "↑↓/jk navigate  enter select  u update  q quit"
+	}
+	content += "\n" + styles.Help.Render(helpText)
 
 	return styles.Box.Render(content)
 }

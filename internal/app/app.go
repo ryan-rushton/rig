@@ -11,10 +11,14 @@ import (
 // Model is the top-level application model that manages screen transitions.
 type Model struct {
 	current tea.Model
+	version string
 }
 
-func New() Model {
-	return Model{current: home.New()}
+func New(version string) Model {
+	return Model{
+		current: home.New(version),
+		version: version,
+	}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -24,7 +28,7 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case messages.BackMsg:
-		h := home.New()
+		h := home.New(m.version)
 		m.current = h
 		return m, h.Init()
 

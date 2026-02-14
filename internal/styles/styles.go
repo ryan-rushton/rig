@@ -8,6 +8,7 @@ var (
 	DimGray = lipgloss.Color("#4B5563")
 	Green   = lipgloss.Color("#10B981")
 	Red     = lipgloss.Color("#EF4444")
+	Yellow  = lipgloss.Color("#F59E0B")
 
 	Title = lipgloss.NewStyle().
 		Bold(true).
@@ -44,4 +45,8 @@ var (
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(DimGray).
 		Padding(1, 2)
+
+	UpdateBanner = lipgloss.NewStyle().
+			Foreground(Yellow).
+			Bold(true)
 )

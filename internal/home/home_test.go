@@ -12,7 +12,7 @@ func key(r rune) tea.KeyMsg            { return tea.KeyMsg{Type: tea.KeyRunes, R
 func keyType(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
 
 func TestNavigation_BoundsChecking(t *testing.T) {
-	m := New()
+	m := New("dev")
 
 	// With only one tool, cursor should stay at 0.
 	r, _ := m.Update(key('j'))
@@ -29,7 +29,7 @@ func TestNavigation_BoundsChecking(t *testing.T) {
 }
 
 func TestEnter_SelectsTool(t *testing.T) {
-	m := New()
+	m := New("dev")
 
 	_, cmd := m.Update(keyType(tea.KeyEnter))
 	if cmd == nil {
@@ -47,7 +47,7 @@ func TestEnter_SelectsTool(t *testing.T) {
 }
 
 func TestSpace_SelectsTool(t *testing.T) {
-	m := New()
+	m := New("dev")
 
 	_, cmd := m.Update(key(' '))
 	if cmd == nil {
@@ -61,7 +61,7 @@ func TestSpace_SelectsTool(t *testing.T) {
 }
 
 func TestQuit_CtrlC(t *testing.T) {
-	m := New()
+	m := New("dev")
 
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	if cmd == nil {
@@ -70,7 +70,7 @@ func TestQuit_CtrlC(t *testing.T) {
 }
 
 func TestQuit_Q(t *testing.T) {
-	m := New()
+	m := New("dev")
 
 	_, cmd := m.Update(key('q'))
 	if cmd == nil {
