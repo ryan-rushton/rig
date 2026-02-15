@@ -125,9 +125,10 @@ func (m Model) View() string {
 			descStyle = styles.Subtitle
 		}
 
-		content += fmt.Sprintf("%s%-22s %s\n",
+		paddedName := fmt.Sprintf("%-22s", t.Name)
+		content += fmt.Sprintf("%s%s %s\n",
 			cursor,
-			nameStyle.Render(t.Name),
+			nameStyle.Render(paddedName),
 			descStyle.Render(t.Description),
 		)
 	}
