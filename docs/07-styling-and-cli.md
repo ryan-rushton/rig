@@ -11,13 +11,14 @@ Styles are created with a builder pattern:
 ```go
 // internal/styles/styles.go
 var (
-    Purple = lipgloss.Color("#7C3AED")
-    Green  = lipgloss.Color("#10B981")
-    Red    = lipgloss.Color("#EF4444")
+    Pink    = lipgloss.Color("#FF2E97")
+    Green   = lipgloss.Color("#39FF14")
+    Red     = lipgloss.Color("#FF3131")
+    Cyan    = lipgloss.Color("#00F0FF")
 
     Title = lipgloss.NewStyle().
         Bold(true).
-        Foreground(Purple)
+        Foreground(Cyan)
 
     Help = lipgloss.NewStyle().
         Foreground(DimGray).
@@ -25,7 +26,7 @@ var (
 
     Box = lipgloss.NewStyle().
         Border(lipgloss.RoundedBorder()).
-        BorderForeground(DimGray).
+        BorderForeground(Cyan).
         Padding(1, 2)
 )
 ```
@@ -35,7 +36,7 @@ var (
 Styles are applied with `.Render()`:
 
 ```go
-styles.Title.Render("Git Branch Manager")    // Bold purple text
+styles.Title.Render("Git Branch Manager")    // Bold cyan text
 styles.Err.Render("something went wrong")    // Red text
 styles.Box.Render(content)                   // Rounded border with padding
 ```

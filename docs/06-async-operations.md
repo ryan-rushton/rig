@@ -61,7 +61,7 @@ Both are initialized in `New()`:
 ```go
 s := spinner.New()
 s.Spinner = spinner.MiniDot       // Braille dot animation
-s.Style = styles.Selected         // Purple bold
+s.Style = styles.Selected         // Pink bold
 
 sw := stopwatch.NewWithInterval(100 * time.Millisecond)  // Updates 10x/sec
 ```
