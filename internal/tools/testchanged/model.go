@@ -7,7 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/stopwatch"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ryan-rushton/rig/internal/messages"
 	"github.com/ryan-rushton/rig/internal/registry"
@@ -32,15 +38,32 @@ const (
 	stateResults
 )
 
-var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
-type tickMsg time.Time
-
-func tick() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
-		return tickMsg(t)
-	})
+type keyMap struct {
+	bindings []key.Binding
 }
+
+func (k keyMap) ShortHelp() []key.Binding  { return k.bindings }
+func (k keyMap) FullHelp() [][]key.Binding { return nil }
+
+var browseEmptyKeys = keyMap{bindings: []key.Binding{
+	key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
+	key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc/q", "back")),
+}}
+
+var browseKeys = keyMap{bindings: []key.Binding{
+	key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "run")),
+	key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
+	key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc/q", "back")),
+}}
+
+var resultsKeys = keyMap{bindings: []key.Binding{
+	key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rerun")),
+	key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc/q", "back")),
+}}
+
+var dismissKeys = keyMap{bindings: []key.Binding{
+	key.NewBinding(key.WithKeys("any"), key.WithHelp("any key", "dismiss")),
+}}
 
 // Messages used by this tool.
 type targetsLoadedMsg struct {
@@ -61,42 +84,57 @@ type discoveredTarget struct {
 
 // Model is the test-changed TUI model.
 type Model struct {
-	state        viewState
-	targets      []discoveredTarget
-	cursor       int
-	output       []string
-	maxOutput    int
-	scrollOffset int
-	errSplash    string
-	startedAt    time.Time
-	spinnerFrame int
-	loadingMsg   string
-	exitCode     int
-	runnerName   string
-	finishedIn   time.Duration
+	state      viewState
+	targets    []discoveredTarget
+	cursor     int
+	output     []string
+	maxOutput  int
+	viewport   viewport.Model
+	errSplash  string
+	spinner    spinner.Model
+	stopwatch  stopwatch.Model
+	help       help.Model
+	loadingMsg string
+	exitCode   int
+	runnerName string
+	finishedIn time.Duration
 }
 
 func New() Model {
+	s := spinner.New()
+	s.Spinner = spinner.MiniDot
+	s.Style = styles.Selected
+
+	sw := stopwatch.NewWithInterval(100 * time.Millisecond)
+
+	vp := viewport.New(80, 30)
+
+	h := help.New()
+	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(styles.DimGray).Italic(true).Bold(true)
+	h.Styles.ShortDesc = styles.Help
+	h.Styles.ShortSeparator = styles.Help
+
 	return Model{
 		state:      stateLoading,
 		maxOutput:  500,
-		startedAt:  time.Now(),
+		spinner:    s,
+		stopwatch:  sw,
+		viewport:   vp,
+		help:       h,
 		loadingMsg: "Detecting default branch...",
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(loadTargets, tick())
+	return tea.Batch(loadTargets, m.spinner.Tick, m.stopwatch.Start())
 }
 
 // startAsync transitions into a waiting state, resets the timer, and
-// batches the command with the ticker. Must be used as: return startAsync(m, ...).
+// batches the command with the spinner/stopwatch. Must be used as: return startAsync(m, ...).
 func startAsync(m Model, state viewState, label string, cmd tea.Cmd) (Model, tea.Cmd) {
 	m.state = state
 	m.loadingMsg = label
-	m.startedAt = time.Now()
-	m.spinnerFrame = 0
-	return m, tea.Batch(cmd, tick())
+	return m, tea.Batch(cmd, m.spinner.Tick, m.stopwatch.Reset(), m.stopwatch.Start())
 }
 
 func showError(m Model, err error) Model {
@@ -195,11 +233,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tickMsg:
-		if m.state == stateLoading || m.state == stateRunning {
-			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
-			return m, tick()
-		}
+	case tea.WindowSizeMsg:
+		// Reserve space for the header (status line + blank line) and footer (help line).
+		headerHeight := 4
+		m.viewport.Width = msg.Width - 6 // account for box border + padding
+		m.viewport.Height = msg.Height - headerHeight - 6
 		return m, nil
 
 	case targetsLoadedMsg:
@@ -218,18 +256,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case testBatchMsg:
 		m.output = append(m.output, msg.lines...)
 		m.state = stateResults
-		m.finishedIn = time.Since(m.startedAt)
+		m.finishedIn = m.stopwatch.Elapsed()
 		if msg.err != nil {
 			m.exitCode = 1
 		} else {
 			m.exitCode = 0
 		}
-		// Auto-scroll to bottom.
-		m.scrollOffset = maxScroll(len(m.output))
+		m.viewport.SetContent(colorizeOutput(m.output))
+		m.viewport.GotoBottom()
 		return m, nil
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+	}
+
+	// Route viewport messages when viewing results.
+	if m.state == stateResults {
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
+	}
+
+	// Route spinner and stopwatch messages when in async states.
+	if m.state == stateLoading || m.state == stateRunning {
+		var cmd tea.Cmd
+		var cmds []tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+		m.stopwatch, cmd = m.stopwatch.Update(msg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	}
 
 	return m, nil
@@ -258,7 +314,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					targets[i] = t.target
 				}
 				m.output = nil
-				m.scrollOffset = 0
 				return startAsync(m, stateRunning, "Running tests...", streamLines(m.runnerName, targets))
 			}
 		case "r":
@@ -278,38 +333,43 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "q", "esc":
 			return m, func() tea.Msg { return messages.BackMsg{} }
-		case "up", "k":
-			if m.scrollOffset > 0 {
-				m.scrollOffset--
-			}
-		case "down", "j":
-			m.scrollOffset++
-			max := maxScroll(len(m.output))
-			if m.scrollOffset > max {
-				m.scrollOffset = max
-			}
 		case "r":
 			m.targets = nil
 			m.cursor = 0
 			m.output = nil
 			return startAsync(m, stateLoading, "Detecting default branch...", loadTargets)
+		default:
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			return m, cmd
 		}
 	}
 
 	return m, nil
 }
 
-const visibleLines = 30
+const tailLines = 30
 
-func maxScroll(total int) int {
-	if total <= visibleLines {
-		return 0
+func colorizeOutput(lines []string) string {
+	var b strings.Builder
+	for i, line := range lines {
+		switch {
+		case strings.HasPrefix(line, "ok"):
+			b.WriteString(styles.Success.Render(line))
+		case strings.HasPrefix(line, "FAIL"):
+			b.WriteString(styles.Err.Render(line))
+		case strings.Contains(line, "--- PASS"):
+			b.WriteString(styles.Success.Render(line))
+		case strings.Contains(line, "--- FAIL"):
+			b.WriteString(styles.Err.Render(line))
+		default:
+			b.WriteString(line)
+		}
+		if i < len(lines)-1 {
+			b.WriteByte('\n')
+		}
 	}
-	return total - visibleLines
-}
-
-func (m Model) elapsed() string {
-	return fmt.Sprintf("%.2fs", time.Since(m.startedAt).Seconds())
+	return b.String()
 }
 
 func (m Model) View() string {
@@ -317,7 +377,7 @@ func (m Model) View() string {
 	if m.errSplash != "" {
 		content := styles.Title.Render("Error") + "\n\n"
 		content += styles.Err.Render(m.errSplash) + "\n"
-		content += "\n" + styles.Help.Render("any key to dismiss")
+		content += "\n" + m.help.View(dismissKeys)
 		return styles.Box.
 			BorderForeground(styles.Red).
 			Render(content)
@@ -327,16 +387,16 @@ func (m Model) View() string {
 
 	switch m.state {
 	case stateLoading:
-		spinner := styles.Selected.Render(spinnerFrames[m.spinnerFrame])
-		content = spinner + " " + styles.Dimmed.Render(m.loadingMsg) +
-			"  " + styles.Subtitle.Render(m.elapsed())
+		elapsed := fmt.Sprintf("%.2fs", m.stopwatch.Elapsed().Seconds())
+		content = m.spinner.View() + " " + styles.Dimmed.Render(m.loadingMsg) +
+			"  " + styles.Subtitle.Render(elapsed)
 
 	case stateBrowse:
 		content = styles.Title.Render("Test Changed Files") + "\n\n"
 
 		if len(m.targets) == 0 {
 			content += styles.Dimmed.Render("No affected test targets found.") + "\n"
-			content += "\n" + styles.Help.Render("r refresh  esc/q back")
+			content += "\n" + m.help.View(browseEmptyKeys)
 		} else {
 			content += styles.Subtitle.Render(
 				fmt.Sprintf("Found %d target(s) via %s runner:", len(m.targets), m.runnerName),
@@ -352,17 +412,17 @@ func (m Model) View() string {
 				content += cursor + nameStyle.Render(t.target) + "\n"
 			}
 
-			content += "\n" + styles.Help.Render("enter run  r refresh  esc/q back")
+			content += "\n" + m.help.View(browseKeys)
 		}
 
 	case stateRunning:
-		spinner := styles.Selected.Render(spinnerFrames[m.spinnerFrame])
-		content = spinner + " " + styles.Dimmed.Render(m.loadingMsg) +
-			"  " + styles.Subtitle.Render(m.elapsed()) + "\n\n"
+		elapsed := fmt.Sprintf("%.2fs", m.stopwatch.Elapsed().Seconds())
+		content = m.spinner.View() + " " + styles.Dimmed.Render(m.loadingMsg) +
+			"  " + styles.Subtitle.Render(elapsed) + "\n\n"
 
 		// Show tail of output collected so far.
 		if len(m.output) > 0 {
-			start := len(m.output) - visibleLines
+			start := len(m.output) - tailLines
 			if start < 0 {
 				start = 0
 			}
@@ -381,39 +441,15 @@ func (m Model) View() string {
 				styles.Subtitle.Render(elapsed) + "\n\n"
 		}
 
-		if len(m.output) > 0 {
-			end := m.scrollOffset + visibleLines
-			if end > len(m.output) {
-				end = len(m.output)
-			}
-			start := m.scrollOffset
-			if start > end {
-				start = end
-			}
-			for _, line := range m.output[start:end] {
-				// Colorize pass/fail lines.
-				switch {
-				case strings.HasPrefix(line, "ok"):
-					content += styles.Success.Render(line) + "\n"
-				case strings.HasPrefix(line, "FAIL"):
-					content += styles.Err.Render(line) + "\n"
-				case strings.Contains(line, "--- PASS"):
-					content += styles.Success.Render(line) + "\n"
-				case strings.Contains(line, "--- FAIL"):
-					content += styles.Err.Render(line) + "\n"
-				default:
-					content += line + "\n"
-				}
-			}
+		content += m.viewport.View()
 
-			if len(m.output) > visibleLines {
-				content += "\n" + styles.Dimmed.Render(
-					fmt.Sprintf("(%d/%d lines — ↑↓/jk to scroll)", end, len(m.output)),
-				)
-			}
+		if len(m.output) > m.viewport.Height {
+			content += "\n" + styles.Dimmed.Render(
+				fmt.Sprintf("(%d%% — ↑↓/jk to scroll)", int(m.viewport.ScrollPercent()*100)),
+			)
 		}
 
-		content += "\n" + styles.Help.Render("r rerun  esc/q back")
+		content += "\n" + m.help.View(resultsKeys)
 	}
 
 	return styles.Box.Render(content)

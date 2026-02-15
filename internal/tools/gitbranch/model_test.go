@@ -2,7 +2,6 @@ package gitbranch
 
 import (
 	"testing"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -10,7 +9,7 @@ import (
 )
 
 // Key helpers to keep tests readable.
-func key(r rune) tea.KeyMsg            { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
+func keyRune(r rune) tea.KeyMsg        { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
 func keyType(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
 
 // modelWithBranches returns a Model in stateBrowse with the supplied branches.
@@ -71,16 +70,6 @@ func TestBranchExists(t *testing.T) {
 	}
 }
 
-func TestElapsed(t *testing.T) {
-	m := New()
-	m.startedAt = time.Now().Add(-1500 * time.Millisecond)
-	got := m.elapsed()
-	if got != "1.50s" {
-		// Allow some slop for test execution time.
-		t.Logf("elapsed() = %q (expected approximately 1.50s)", got)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Error splash
 // ---------------------------------------------------------------------------
@@ -89,7 +78,7 @@ func TestErrorSplash_DismissedOnAnyKey(t *testing.T) {
 	m := modelWithBranches(testBranches)
 	m.errSplash = "something went wrong"
 
-	result, _ := m.Update(key('x'))
+	result, _ := m.Update(keyRune('x'))
 	got := result.(Model)
 
 	if got.errSplash != "" {
@@ -97,18 +86,6 @@ func TestErrorSplash_DismissedOnAnyKey(t *testing.T) {
 	}
 	if got.state != stateBrowse {
 		t.Errorf("expected stateBrowse, got %d", got.state)
-	}
-}
-
-func TestErrorSplash_TickDoesNotDismiss(t *testing.T) {
-	m := modelWithBranches(testBranches)
-	m.errSplash = "some error"
-
-	result, _ := m.Update(tickMsg(time.Now()))
-	got := result.(Model)
-
-	if got.errSplash == "" {
-		t.Error("expected errSplash to remain after tickMsg")
 	}
 }
 
@@ -121,27 +98,27 @@ func TestBrowse_CursorNavigation(t *testing.T) {
 	m.cursor = 0
 
 	// Move down twice.
-	r, _ := m.Update(key('j'))
+	r, _ := m.Update(keyRune('j'))
 	m = r.(Model)
 	if m.cursor != 1 {
 		t.Fatalf("expected cursor=1 after j, got %d", m.cursor)
 	}
 
-	r, _ = m.Update(key('j'))
+	r, _ = m.Update(keyRune('j'))
 	m = r.(Model)
 	if m.cursor != 2 {
 		t.Fatalf("expected cursor=2 after j, got %d", m.cursor)
 	}
 
 	// Can't go below last branch.
-	r, _ = m.Update(key('j'))
+	r, _ = m.Update(keyRune('j'))
 	m = r.(Model)
 	if m.cursor != 2 {
 		t.Fatalf("expected cursor to stay at 2, got %d", m.cursor)
 	}
 
 	// Move up.
-	r, _ = m.Update(key('k'))
+	r, _ = m.Update(keyRune('k'))
 	m = r.(Model)
 	if m.cursor != 1 {
 		t.Fatalf("expected cursor=1 after k, got %d", m.cursor)
@@ -203,7 +180,7 @@ func TestBrowse_EditModeEntry(t *testing.T) {
 	m := modelWithBranches(testBranches)
 	m.cursor = 1
 
-	r, _ := m.Update(key('e'))
+	r, _ := m.Update(keyRune('e'))
 	got := r.(Model)
 
 	if got.state != stateEdit {
@@ -282,7 +259,7 @@ func TestEdit_EnterWithoutRemote_StartsRename(t *testing.T) {
 func TestBrowse_CreateModeEntry(t *testing.T) {
 	m := modelWithBranches(testBranches)
 
-	r, _ := m.Update(key('c'))
+	r, _ := m.Update(keyRune('c'))
 	got := r.(Model)
 
 	if got.state != stateCreate {
@@ -352,7 +329,7 @@ func TestDelete_FirstD_StagesBranch(t *testing.T) {
 	m := modelWithBranches(testBranches)
 	m.cursor = 1 // feature/foo
 
-	r, _ := m.Update(key('d'))
+	r, _ := m.Update(keyRune('d'))
 	got := r.(Model)
 
 	if !got.deleteStaged {
@@ -372,7 +349,7 @@ func TestDelete_SecondD_ExecutesDelete(t *testing.T) {
 	m.deleteStaged = true
 	m.deleteStagedIdx = 1
 
-	r, cmd := m.Update(key('d'))
+	r, cmd := m.Update(keyRune('d'))
 	got := r.(Model)
 
 	if got.deleteStaged {
@@ -395,7 +372,7 @@ func TestDelete_OtherKeyClearsStagng(t *testing.T) {
 	m.deleteStaged = true
 	m.deleteStagedIdx = 1
 
-	r, _ := m.Update(key('j'))
+	r, _ := m.Update(keyRune('j'))
 	got := r.(Model)
 
 	if got.deleteStaged {
@@ -407,7 +384,7 @@ func TestDelete_OnCurrentBranch_Ignored(t *testing.T) {
 	m := modelWithBranches(testBranches)
 	m.cursor = 0 // main, IsCurrent=true
 
-	r, _ := m.Update(key('d'))
+	r, _ := m.Update(keyRune('d'))
 	got := r.(Model)
 
 	if got.deleteStaged {
@@ -421,7 +398,7 @@ func TestDelete_DifferentCursorClearsAndRestages(t *testing.T) {
 	m.deleteStaged = true
 	m.deleteStagedIdx = 2 // staged on a different branch
 
-	r, _ := m.Update(key('d'))
+	r, _ := m.Update(keyRune('d'))
 	got := r.(Model)
 
 	// Should stage the new cursor position, not execute a delete.
@@ -445,13 +422,13 @@ func TestConfirmRemote_Navigation(t *testing.T) {
 	m.state = stateConfirmRemote
 	m.confirmIdx = 0
 
-	r, _ := m.Update(key('l'))
+	r, _ := m.Update(keyRune('l'))
 	got := r.(Model)
 	if got.confirmIdx != 1 {
 		t.Errorf("expected confirmIdx=1 after l, got %d", got.confirmIdx)
 	}
 
-	r, _ = got.Update(key('h'))
+	r, _ = got.Update(keyRune('h'))
 	got = r.(Model)
 	if got.confirmIdx != 0 {
 		t.Errorf("expected confirmIdx=0 after h, got %d", got.confirmIdx)
@@ -464,7 +441,7 @@ func TestConfirmRemote_YShortcut(t *testing.T) {
 	m.editing = testBranches[1]
 	m.input.SetValue("feature/bar")
 
-	r, cmd := m.Update(key('y'))
+	r, cmd := m.Update(keyRune('y'))
 	got := r.(Model)
 
 	if got.state != stateProcessing {
@@ -484,7 +461,7 @@ func TestConfirmRemote_NShortcut(t *testing.T) {
 	m.editing = testBranches[1]
 	m.input.SetValue("feature/bar")
 
-	r, cmd := m.Update(key('n'))
+	r, cmd := m.Update(keyRune('n'))
 	got := r.(Model)
 
 	if got.state != stateProcessing {
@@ -659,54 +636,6 @@ func TestCreateResultMsg_Success(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Tick
-// ---------------------------------------------------------------------------
-
-func TestTickMsg_IncrementsDuringLoading(t *testing.T) {
-	m := New()
-	m.state = stateLoading
-	m.spinnerFrame = 0
-
-	r, cmd := m.Update(tickMsg(time.Now()))
-	got := r.(Model)
-
-	if got.spinnerFrame != 1 {
-		t.Errorf("expected spinnerFrame=1, got %d", got.spinnerFrame)
-	}
-	if cmd == nil {
-		t.Error("expected another tick cmd")
-	}
-}
-
-func TestTickMsg_WrapsAround(t *testing.T) {
-	m := New()
-	m.state = stateProcessing
-	m.spinnerFrame = len(spinnerFrames) - 1
-
-	r, _ := m.Update(tickMsg(time.Now()))
-	got := r.(Model)
-
-	if got.spinnerFrame != 0 {
-		t.Errorf("expected spinnerFrame=0 after wrap, got %d", got.spinnerFrame)
-	}
-}
-
-func TestTickMsg_IgnoredInBrowseState(t *testing.T) {
-	m := modelWithBranches(testBranches)
-	m.spinnerFrame = 5
-
-	r, cmd := m.Update(tickMsg(time.Now()))
-	got := r.(Model)
-
-	if got.spinnerFrame != 5 {
-		t.Errorf("expected spinnerFrame unchanged in browse, got %d", got.spinnerFrame)
-	}
-	if cmd != nil {
-		t.Error("expected nil cmd in browse state")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // startAsync
 // ---------------------------------------------------------------------------
 
@@ -720,9 +649,6 @@ func TestStartAsync_SetsState(t *testing.T) {
 	}
 	if got.processingMsg != "Doing things..." {
 		t.Errorf("expected processingMsg 'Doing things...', got %q", got.processingMsg)
-	}
-	if got.spinnerFrame != 0 {
-		t.Errorf("expected spinnerFrame reset to 0, got %d", got.spinnerFrame)
 	}
 	if cmd == nil {
 		t.Error("expected non-nil batched cmd")
@@ -765,7 +691,7 @@ func TestBrowse_CtrlC_Quits(t *testing.T) {
 func TestBrowse_Q_SendsBackMsg(t *testing.T) {
 	m := modelWithBranches(testBranches)
 
-	_, cmd := m.Update(key('q'))
+	_, cmd := m.Update(keyRune('q'))
 
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd on q")

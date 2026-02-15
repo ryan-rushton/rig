@@ -5,6 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/stopwatch"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -35,15 +39,47 @@ const (
 	stateResult
 )
 
-var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
-type tickMsg time.Time
-
-func tick() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
-		return tickMsg(t)
-	})
+type keyMap struct {
+	bindings []key.Binding
 }
+
+func (k keyMap) ShortHelp() []key.Binding  { return k.bindings }
+func (k keyMap) FullHelp() [][]key.Binding { return nil }
+
+var browseKeys = keyMap{bindings: []key.Binding{
+	key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "checkout")),
+	key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "rename")),
+	key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "create")),
+	key.NewBinding(key.WithKeys("d"), key.WithHelp("dd", "delete")),
+	key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
+	key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc/q", "back")),
+}}
+
+var editKeys = keyMap{bindings: []key.Binding{
+	key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm")),
+	key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+}}
+
+var createKeys = keyMap{bindings: []key.Binding{
+	key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "create")),
+	key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+}}
+
+var confirmRemoteKeys = keyMap{bindings: []key.Binding{
+	key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←→/hl", "select")),
+	key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm")),
+	key.NewBinding(key.WithKeys("y", "n"), key.WithHelp("y/n", "shortcut")),
+	key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+}}
+
+var resultKeys = keyMap{bindings: []key.Binding{
+	key.NewBinding(key.WithKeys("any"), key.WithHelp("any key", "refresh")),
+	key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc/q", "back")),
+}}
+
+var dismissKeys = keyMap{bindings: []key.Binding{
+	key.NewBinding(key.WithKeys("any"), key.WithHelp("any key", "dismiss")),
+}}
 
 type branchesLoadedMsg struct {
 	branches []Branch
@@ -71,8 +107,9 @@ type Model struct {
 	result        string
 	errSplash     string // non-empty = show error splash; any key dismisses it
 	confirmIdx    int    // 0 = yes, 1 = no
-	startedAt     time.Time
-	spinnerFrame  int
+	spinner       spinner.Model
+	stopwatch     stopwatch.Model
+	help          help.Model
 	processingMsg string
 	// delete staging — first d marks, second d confirms
 	deleteStaged    bool
@@ -84,15 +121,28 @@ func New() Model {
 	ti.CharLimit = 200
 	ti.Width = 50
 
+	s := spinner.New()
+	s.Spinner = spinner.MiniDot
+	s.Style = styles.Selected
+
+	sw := stopwatch.NewWithInterval(100 * time.Millisecond)
+
+	h := help.New()
+	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(styles.DimGray).Italic(true).Bold(true)
+	h.Styles.ShortDesc = styles.Help
+	h.Styles.ShortSeparator = styles.Help
+
 	return Model{
 		state:     stateLoading,
 		input:     ti,
-		startedAt: time.Now(),
+		spinner:   s,
+		stopwatch: sw,
+		help:      h,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(fetchBranches, tick())
+	return tea.Batch(fetchBranches, m.spinner.Tick, m.stopwatch.Start())
 }
 
 func fetchBranches() tea.Msg {
@@ -101,14 +151,12 @@ func fetchBranches() tea.Msg {
 }
 
 // startAsync transitions into a waiting state, resets the timer, and
-// batches the git command with the ticker. Returns the updated model
+// batches the git command with the spinner/stopwatch. Returns the updated model
 // and batched command — must be used as: return startAsync(m, ...).
 func startAsync(m Model, state viewState, label string, cmd tea.Cmd) (Model, tea.Cmd) {
 	m.state = state
 	m.processingMsg = label
-	m.startedAt = time.Now()
-	m.spinnerFrame = 0
-	return m, tea.Batch(cmd, tick())
+	return m, tea.Batch(cmd, m.spinner.Tick, m.stopwatch.Reset(), m.stopwatch.Start())
 }
 
 // showError keeps the model in stateBrowse but sets the splash message.
@@ -128,13 +176,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case tickMsg:
-		if m.state == stateLoading || m.state == stateProcessing {
-			m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
-			return m, tick()
-		}
-		return m, nil
-
 	case branchesLoadedMsg:
 		if msg.err != nil {
 			m = showError(m, msg.err)
@@ -210,6 +251,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+	}
+
+	// Route spinner and stopwatch messages when in async states.
+	if m.state == stateLoading || m.state == stateProcessing {
+		var cmd tea.Cmd
+		var cmds []tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+		m.stopwatch, cmd = m.stopwatch.Update(msg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	}
 
 	return m, nil
@@ -424,16 +476,12 @@ func splitUpstream(upstream string) (remote, branch string) {
 	return upstream[:idx], upstream[idx+1:]
 }
 
-func (m Model) elapsed() string {
-	return fmt.Sprintf("%.2fs", time.Since(m.startedAt).Seconds())
-}
-
 func (m Model) View() string {
 	// Error splash takes over the whole view; any key will clear it.
 	if m.errSplash != "" {
 		content := styles.Title.Render("Error") + "\n\n"
 		content += styles.Err.Render(m.errSplash) + "\n"
-		content += "\n" + styles.Help.Render("any key to dismiss")
+		content += "\n" + m.help.View(dismissKeys)
 		return styles.Box.
 			BorderForeground(styles.Red).
 			Render(content)
@@ -443,9 +491,9 @@ func (m Model) View() string {
 
 	switch m.state {
 	case stateLoading:
-		spinner := styles.Selected.Render(spinnerFrames[m.spinnerFrame])
-		content = spinner + " " + styles.Dimmed.Render(m.processingMsg) +
-			"  " + styles.Subtitle.Render(m.elapsed())
+		elapsed := fmt.Sprintf("%.2fs", m.stopwatch.Elapsed().Seconds())
+		content = m.spinner.View() + " " + styles.Dimmed.Render(m.processingMsg) +
+			"  " + styles.Subtitle.Render(elapsed)
 
 	case stateBrowse:
 		content = styles.Title.Render("Git Branch Manager") + "\n\n"
@@ -494,13 +542,13 @@ func (m Model) View() string {
 			}
 		}
 
-		content += "\n" + styles.Help.Render("enter checkout  e rename  c create  dd delete  r refresh  esc/q back")
+		content += "\n" + m.help.View(browseKeys)
 
 	case stateEdit:
 		content = styles.Title.Render("Rename Branch") + "\n\n"
 		content += styles.Dimmed.Render("Old: ") + styles.Subtitle.Render(m.editing.Name) + "\n"
 		content += styles.Dimmed.Render("New: ") + m.input.View() + "\n"
-		content += "\n" + styles.Help.Render("enter confirm  esc cancel")
+		content += "\n" + m.help.View(editKeys)
 
 	case stateCreate:
 		newName := m.input.Value()
@@ -516,7 +564,7 @@ func (m Model) View() string {
 			content += styles.Success.Render("✓ name available")
 		}
 
-		content += "\n\n" + styles.Help.Render("enter create  esc cancel")
+		content += "\n\n" + m.help.View(createKeys)
 
 	case stateConfirmRemote:
 		newName := strings.TrimSpace(m.input.Value())
@@ -540,17 +588,17 @@ func (m Model) View() string {
 			yesStyle.Render("[ Yes ]"),
 			noStyle.Render("[ No ]"),
 		)
-		content += "\n" + styles.Help.Render("←→/hl select  enter confirm  y/n shortcut  esc cancel")
+		content += "\n" + m.help.View(confirmRemoteKeys)
 
 	case stateProcessing:
-		spinner := styles.Selected.Render(spinnerFrames[m.spinnerFrame])
-		content = spinner + " " + styles.Dimmed.Render(m.processingMsg) +
-			"  " + styles.Subtitle.Render(m.elapsed())
+		elapsed := fmt.Sprintf("%.2fs", m.stopwatch.Elapsed().Seconds())
+		content = m.spinner.View() + " " + styles.Dimmed.Render(m.processingMsg) +
+			"  " + styles.Subtitle.Render(elapsed)
 
 	case stateResult:
 		content = styles.Title.Render("Done") + "\n\n"
 		content += m.result + "\n"
-		content += "\n" + styles.Help.Render("any key to refresh  esc/q back")
+		content += "\n" + m.help.View(resultKeys)
 	}
 
 	return styles.Box.Render(content)

@@ -3,6 +3,8 @@ package home
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -12,6 +14,27 @@ import (
 	"github.com/ryan-rushton/rig/internal/updater"
 )
 
+type keyMap struct {
+	Navigate key.Binding
+	Select   key.Binding
+	Update   key.Binding
+	Quit     key.Binding
+}
+
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Navigate, k.Select, k.Update, k.Quit}
+}
+func (k keyMap) FullHelp() [][]key.Binding { return nil }
+
+func newKeys() keyMap {
+	return keyMap{
+		Navigate: key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓/jk", "navigate")),
+		Select:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select")),
+		Update:   key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "update"), key.WithDisabled()),
+		Quit:     key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	}
+}
+
 // Model is the home screen model.
 type Model struct {
 	cursor    int
@@ -20,10 +43,21 @@ type Model struct {
 	updating  bool
 	updated   bool
 	updateErr string
+	help      help.Model
+	keys      keyMap
 }
 
 func New(version string) Model {
-	return Model{version: version}
+	h := help.New()
+	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(styles.DimGray).Italic(true).Bold(true)
+	h.Styles.ShortDesc = styles.Help
+	h.Styles.ShortSeparator = styles.Help
+
+	return Model{
+		version: version,
+		help:    h,
+		keys:    newKeys(),
+	}
 }
 
 func checkForUpdate(version string) tea.Cmd {
@@ -54,6 +88,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case messages.UpdateAvailableMsg:
 		m.updateTag = msg.Tag
+		m.keys.Update.SetEnabled(true)
 		return m, nil
 
 	case messages.UpdateFinishedMsg:
@@ -69,6 +104,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "u" && m.updateTag != "" && !m.updating && !m.updated {
 			m.updating = true
 			m.updateErr = ""
+			m.keys.Update.SetEnabled(false)
 			return m, runUpdate(m.updateTag)
 		}
 
@@ -133,11 +169,7 @@ func (m Model) View() string {
 		)
 	}
 
-	helpText := "↑↓/jk navigate  enter select  q quit"
-	if m.updateTag != "" && !m.updating && !m.updated {
-		helpText = "↑↓/jk navigate  enter select  u update  q quit"
-	}
-	content += "\n" + styles.Help.Render(helpText)
+	content += "\n" + m.help.View(m.keys)
 
 	return styles.Box.Render(content)
 }
