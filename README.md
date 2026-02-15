@@ -39,7 +39,8 @@ rig
 Or run a tool directly:
 
 ```bash
-rig git-branch   # also: rig gb
+rig git-branch    # also: rig gb
+rig test-changed  # also: rig tc
 ```
 
 ## Tools
@@ -60,6 +61,18 @@ Interactive git branch manager — checkout, rename, create, and delete branches
 | `esc` / `q` | Back / quit                                       |
 
 When renaming a branch that has a remote tracking branch, you'll be prompted whether to also rename it on the remote. Git errors (e.g. uncommitted changes blocking a checkout) are shown in a dismissible splash.
+
+### `test-changed` / `tc`
+
+Detects files changed vs the merge base with the default branch and runs affected tests. Supports Go and Bazel projects.
+
+| Key         | Action               |
+| ----------- | -------------------- |
+| `j` / `↓`   | Move down            |
+| `k` / `↑`   | Move up              |
+| `enter`     | Run tests            |
+| `r`         | Re-run / refresh     |
+| `esc` / `q` | Back / quit          |
 
 ## Development
 

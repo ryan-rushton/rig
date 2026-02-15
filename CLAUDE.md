@@ -41,15 +41,20 @@ Tools that call git use Bubble Tea commands (async `tea.Cmd`) so the UI never bl
 
 ### Adding a new tool
 
-1. Create `internal/tools/<name>/model.go` — implement `tea.Model`; send `messages.BackMsg{}` on quit/back
+1. Create `internal/tools/<name>/model.go` — implement `tea.Model`; send `messages.BackMsg{}` on quit/back; call `registry.Register(...)` in `init()`
 2. Create `cmd/<name>.go` — cobra subcommand calling `tea.NewProgram(messages.Standalone(<name>.New()), tea.WithAltScreen())`
-3. Add an entry to `tools` in `internal/home/home.go`
-4. Add a case to the `ToolSelectedMsg` switch in `internal/app/app.go`
+
+The `init()` self-registration means the tool automatically appears on the home screen and works via CLI — no changes to `app.go` or `home.go` needed. See `docs/10-adding-a-tool.md` for a full template.
 
 ### Shared packages
 
 - `internal/styles/` — lipgloss color palette and reusable styles; use these rather than defining new colors inline
 - `internal/messages/` — shared message types and the `Standalone` wrapper
+- `internal/registry/` — tool registry; tools self-register via `init()` functions
+
+## Documentation
+
+`docs/` contains learning guides that teach Go and Bubble Tea using this codebase as the example. See `LEARNING.md` for the index.
 
 ## CI/CD
 
