@@ -128,7 +128,7 @@ The package name is typically the same as the directory name. When you import a 
 ```go
 import "github.com/ryan-rushton/rig/internal/styles"
 
-// Usage: styles.Title, styles.Purple, etc.
+// Usage: styles.Title, styles.Pink, etc.
 ```
 
 ### Import Groups

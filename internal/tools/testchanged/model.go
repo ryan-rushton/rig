@@ -247,9 +247,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.state = stateBrowse
 		m.runnerName = msg.runner
-		m.targets = make([]discoveredTarget, len(msg.targets))
-		for i, t := range msg.targets {
-			m.targets[i] = discoveredTarget{runner: msg.runner, target: t}
+		m.targets = make([]discoveredTarget, 0, len(msg.targets)+1)
+		if len(msg.targets) > 0 {
+			m.targets = append(m.targets, discoveredTarget{runner: msg.runner, target: "All"})
+		}
+		for _, t := range msg.targets {
+			m.targets = append(m.targets, discoveredTarget{runner: msg.runner, target: t})
 		}
 		return m, nil
 
@@ -309,9 +312,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if len(m.targets) > 0 {
-				targets := make([]string, len(m.targets))
-				for i, t := range m.targets {
-					targets[i] = t.target
+				var targets []string
+				if m.cursor == 0 {
+					// "All" selected — run all real targets.
+					for _, t := range m.targets[1:] {
+						targets = append(targets, t.target)
+					}
+				} else {
+					targets = []string{m.targets[m.cursor].target}
 				}
 				m.output = nil
 				return startAsync(m, stateRunning, "Running tests...", streamLines(m.runnerName, targets))
@@ -398,8 +406,10 @@ func (m Model) View() string {
 			content += styles.Dimmed.Render("No affected test targets found.") + "\n"
 			content += "\n" + m.help.View(browseEmptyKeys)
 		} else {
+			// Subtract 1 for the synthetic "All" entry.
+			realCount := len(m.targets) - 1
 			content += styles.Subtitle.Render(
-				fmt.Sprintf("Found %d target(s) via %s runner:", len(m.targets), m.runnerName),
+				fmt.Sprintf("Found %d target(s) via %s runner:", realCount, m.runnerName),
 			) + "\n\n"
 
 			for i, t := range m.targets {
@@ -410,6 +420,9 @@ func (m Model) View() string {
 					nameStyle = styles.Selected
 				}
 				content += cursor + nameStyle.Render(t.target) + "\n"
+				if i == 0 {
+					content += "\n"
+				}
 			}
 
 			content += "\n" + m.help.View(browseKeys)

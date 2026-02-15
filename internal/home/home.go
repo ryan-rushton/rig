@@ -133,7 +133,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	content := styles.Title.Render("rig") + "\n"
+	banner := "█▀█ █ █▀▀\n█▀▄ █ █ █\n▀ ▀ ▀ ▀▀▀"
+	content := styles.Title.Render(banner) + "\n"
 	content += styles.Subtitle.Render("Ryan's TUI Toolkit") + "\n\n"
 
 	// Update banner

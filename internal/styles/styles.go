@@ -3,22 +3,22 @@ package styles
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	Purple  = lipgloss.Color("#7C3AED")
-	Gray    = lipgloss.Color("#9CA3AF")
-	DimGray = lipgloss.Color("#4B5563")
-	Green   = lipgloss.Color("#10B981")
-	Red     = lipgloss.Color("#EF4444")
-	Yellow  = lipgloss.Color("#F59E0B")
+	Pink    = lipgloss.Color("#FF2E97")
+	Gray    = lipgloss.Color("#8A8F98")
+	DimGray = lipgloss.Color("#3D4250")
+	Green   = lipgloss.Color("#39FF14")
+	Red     = lipgloss.Color("#FF3131")
+	Cyan    = lipgloss.Color("#00F0FF")
 
 	Title = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(Purple)
+		Foreground(Cyan)
 
 	Subtitle = lipgloss.NewStyle().
-			Foreground(Gray)
+			Foreground(Cyan)
 
 	Selected = lipgloss.NewStyle().
-			Foreground(Purple).
+			Foreground(Pink).
 			Bold(true)
 
 	Dimmed = lipgloss.NewStyle().
@@ -43,10 +43,10 @@ var (
 
 	Box = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(DimGray).
+		BorderForeground(Cyan).
 		Padding(1, 2)
 
 	UpdateBanner = lipgloss.NewStyle().
-			Foreground(Yellow).
+			Foreground(Cyan).
 			Bold(true)
 )

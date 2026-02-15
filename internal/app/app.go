@@ -10,8 +10,9 @@ import (
 
 // Model is the top-level application model that manages screen transitions.
 type Model struct {
-	current tea.Model
-	version string
+	current    tea.Model
+	version    string
+	windowSize tea.WindowSizeMsg
 }
 
 func New(version string) Model {
@@ -26,17 +27,21 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if ws, ok := msg.(tea.WindowSizeMsg); ok {
+		m.windowSize = ws
+	}
+
 	switch msg := msg.(type) {
 	case messages.BackMsg:
 		h := home.New(m.version)
 		m.current = h
-		return m, h.Init()
+		return m, tea.Batch(h.Init(), func() tea.Msg { return m.windowSize })
 
 	case messages.ToolSelectedMsg:
 		if t := registry.Get(msg.ID); t != nil {
 			tool := t.New()
 			m.current = tool
-			return m, tool.Init()
+			return m, tea.Batch(tool.Init(), func() tea.Msg { return m.windowSize })
 		}
 	}
 
