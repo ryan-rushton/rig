@@ -87,17 +87,18 @@ func createBranch(name string) error {
 func renameRemoteBranch(remoteName, oldBranch, newBranch string) error {
 	var buf bytes.Buffer
 
-	delCmd := exec.Command("git", "push", remoteName, "--delete", oldBranch)
-	delCmd.Stderr = &buf
-	if err := delCmd.Run(); err != nil {
-		return fmt.Errorf("delete remote branch: %s", strings.TrimSpace(buf.String()))
-	}
-
-	buf.Reset()
+	// Push new branch first — if this fails, old branch is still intact.
 	pushCmd := exec.Command("git", "push", "--set-upstream", remoteName, newBranch)
 	pushCmd.Stderr = &buf
 	if err := pushCmd.Run(); err != nil {
 		return fmt.Errorf("push new branch: %s", strings.TrimSpace(buf.String()))
+	}
+
+	buf.Reset()
+	delCmd := exec.Command("git", "push", remoteName, "--delete", oldBranch)
+	delCmd.Stderr = &buf
+	if err := delCmd.Run(); err != nil {
+		return fmt.Errorf("delete old remote branch: %s", strings.TrimSpace(buf.String()))
 	}
 
 	return nil

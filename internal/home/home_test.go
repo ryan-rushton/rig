@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/ryan-rushton/rig/internal/messages"
+	_ "github.com/ryan-rushton/rig/internal/tools/gitbranch" // registers tool via init()
 )
 
 func key(r rune) tea.KeyMsg            { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }

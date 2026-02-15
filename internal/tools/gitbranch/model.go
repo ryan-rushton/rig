@@ -10,8 +10,18 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ryan-rushton/rig/internal/messages"
+	"github.com/ryan-rushton/rig/internal/registry"
 	"github.com/ryan-rushton/rig/internal/styles"
 )
+
+func init() {
+	registry.Register(registry.Tool{
+		ID:          "git-branch",
+		Name:        "git-branch",
+		Description: "Rename git branches (local and remote)",
+		New:         func() tea.Model { return New() },
+	})
+}
 
 type viewState int
 
@@ -139,7 +149,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case renameResultMsg:
 		if msg.err != nil {
-			m = showError(m, msg.err)
+			if msg.localOk {
+				// Local succeeded but remote failed — show partial result.
+				m.state = stateResult
+				remote, _ := splitUpstream(m.editing.Upstream)
+				m.result = styles.Success.Render("✓") + " Renamed " +
+					styles.Dimmed.Render(m.editing.Name) + " → " +
+					styles.Selected.Render(m.input.Value()) + "\n" +
+					styles.Err.Render("✗") + " Remote " +
+					styles.Remote.Render(remote) + " update failed: " +
+					styles.Err.Render(msg.err.Error())
+			} else {
+				m = showError(m, msg.err)
+			}
 		} else {
 			m.state = stateResult
 			lines := []string{

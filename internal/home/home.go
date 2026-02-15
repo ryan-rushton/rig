@@ -7,23 +7,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/ryan-rushton/rig/internal/messages"
+	"github.com/ryan-rushton/rig/internal/registry"
 	"github.com/ryan-rushton/rig/internal/styles"
 	"github.com/ryan-rushton/rig/internal/updater"
 )
-
-type tool struct {
-	ID          string
-	Name        string
-	Description string
-}
-
-var tools = []tool{
-	{
-		ID:          "git-branch",
-		Name:        "git-branch",
-		Description: "Rename git branches (local and remote)",
-	},
-}
 
 // Model is the home screen model.
 type Model struct {
@@ -93,13 +80,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor--
 			}
 		case "down", "j":
-			if m.cursor < len(tools)-1 {
+			if m.cursor < len(registry.All())-1 {
 				m.cursor++
 			}
 		case "enter", " ":
-			selected := tools[m.cursor]
-			return m, func() tea.Msg {
-				return messages.ToolSelectedMsg{ID: selected.ID}
+			all := registry.All()
+			if m.cursor < len(all) {
+				selected := all[m.cursor]
+				return m, func() tea.Msg {
+					return messages.ToolSelectedMsg{ID: selected.ID}
+				}
 			}
 		}
 	}
@@ -124,7 +114,7 @@ func (m Model) View() string {
 		) + "\n\n"
 	}
 
-	for i, t := range tools {
+	for i, t := range registry.All() {
 		cursor := "  "
 		nameStyle := lipgloss.NewStyle()
 		descStyle := styles.Dimmed

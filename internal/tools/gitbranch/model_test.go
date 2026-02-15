@@ -590,6 +590,61 @@ func TestCheckoutResultMsg_Error(t *testing.T) {
 	}
 }
 
+func TestRenameResultMsg_PartialSuccess(t *testing.T) {
+	m := modelWithBranches(testBranches)
+	m.state = stateProcessing
+	m.editing = testBranches[1] // feature/foo with origin/feature/foo upstream
+	m.input.SetValue("feature/bar")
+	m.didRemote = true
+
+	r, _ := m.Update(renameResultMsg{localOk: true, err: errForTest("push failed")})
+	got := r.(Model)
+
+	if got.state != stateResult {
+		t.Errorf("expected stateResult for partial success, got %d", got.state)
+	}
+	if got.errSplash != "" {
+		t.Error("expected no errSplash for partial success")
+	}
+	if got.result == "" {
+		t.Error("expected result message to be set")
+	}
+}
+
+func TestRenameResultMsg_FullFailure(t *testing.T) {
+	m := modelWithBranches(testBranches)
+	m.state = stateProcessing
+	m.editing = testBranches[1]
+
+	r, _ := m.Update(renameResultMsg{localOk: false, err: errForTest("rename failed")})
+	got := r.(Model)
+
+	if got.state != stateBrowse {
+		t.Errorf("expected stateBrowse (splash), got %d", got.state)
+	}
+	if got.errSplash != "rename failed" {
+		t.Errorf("expected errSplash 'rename failed', got %q", got.errSplash)
+	}
+}
+
+func TestRenameResultMsg_FullSuccess(t *testing.T) {
+	m := modelWithBranches(testBranches)
+	m.state = stateProcessing
+	m.editing = testBranches[1]
+	m.input.SetValue("feature/bar")
+	m.didRemote = true
+
+	r, _ := m.Update(renameResultMsg{localOk: true, remoteOk: true, err: nil})
+	got := r.(Model)
+
+	if got.state != stateResult {
+		t.Errorf("expected stateResult, got %d", got.state)
+	}
+	if got.result == "" {
+		t.Error("expected result message to be set")
+	}
+}
+
 func TestCreateResultMsg_Success(t *testing.T) {
 	m := modelWithBranches(testBranches)
 	m.state = stateProcessing

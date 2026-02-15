@@ -5,7 +5,7 @@ import (
 
 	"github.com/ryan-rushton/rig/internal/home"
 	"github.com/ryan-rushton/rig/internal/messages"
-	"github.com/ryan-rushton/rig/internal/tools/gitbranch"
+	"github.com/ryan-rushton/rig/internal/registry"
 )
 
 // Model is the top-level application model that manages screen transitions.
@@ -33,10 +33,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, h.Init()
 
 	case messages.ToolSelectedMsg:
-		if msg.ID == "git-branch" {
-			gb := gitbranch.New()
-			m.current = gb
-			return m, gb.Init()
+		if t := registry.Get(msg.ID); t != nil {
+			tool := t.New()
+			m.current = tool
+			return m, tool.Init()
 		}
 	}
 
