@@ -2,6 +2,8 @@
 
 **Ryan's jig** — a personal TUI toolkit for custom dev workflows, built with Go and [Charm](https://charm.sh/).
 
+So far this has been heavily developed by Claude Code's Opus 4.6, but I am getting it to teach me go in the process. Check out **[LEARNING.md](LEARNING.md)**
+
 ## Install
 
 ```bash
