@@ -5,14 +5,14 @@
 Messages are how events flow through the system. They can be any Go type:
 
 ```go
-// A simple message — just a type alias
-type tickMsg time.Time
-
 // A message with data
 type branchesLoadedMsg struct {
     branches []Branch
     err      error
 }
+
+// A simple message — no fields needed
+type deleteResultMsg struct{ err error }
 
 // Messages from other packages
 type BackMsg struct{}

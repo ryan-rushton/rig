@@ -45,7 +45,7 @@ Called once when the program starts. Returns a command to run initial async work
 
 ```go
 func (m Model) Init() tea.Cmd {
-    return tea.Batch(fetchBranches, tick())
+    return tea.Batch(fetchBranches, m.spinner.Tick, m.stopwatch.Start())
 }
 ```
 
@@ -95,15 +95,16 @@ func (m Model) View() string {
 
     switch m.state {
     case stateLoading:
-        spinner := styles.Selected.Render(spinnerFrames[m.spinnerFrame])
-        content = spinner + " " + styles.Dimmed.Render(m.processingMsg)
+        elapsed := fmt.Sprintf("%.2fs", m.stopwatch.Elapsed().Seconds())
+        content = m.spinner.View() + " " + styles.Dimmed.Render(m.processingMsg) +
+            "  " + styles.Subtitle.Render(elapsed)
 
     case stateBrowse:
         content = styles.Title.Render("Git Branch Manager") + "\n\n"
         for i, b := range m.branches {
             // ... render each branch
         }
-        content += "\n" + styles.Help.Render("enter checkout  e rename  esc/q back")
+        content += "\n" + m.help.View(browseKeys)  // Uses bubbles/help component
     }
 
     return styles.Box.Render(content)

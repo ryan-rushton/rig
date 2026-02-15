@@ -3,7 +3,7 @@
 All async operations in rig follow the same pattern:
 
 ```
-User action → startAsync() → [stateProcessing + spinner] → result message → new state
+User action → startAsync() → [stateProcessing + spinner/stopwatch] → result message → new state
 ```
 
 ## Step by Step
@@ -19,21 +19,27 @@ case "enter":
 func startAsync(m Model, state viewState, label string, cmd tea.Cmd) (Model, tea.Cmd) {
     m.state = state
     m.processingMsg = label
-    m.startedAt = time.Now()
-    m.spinnerFrame = 0
-    return m, tea.Batch(cmd, tick())    // Run the command AND start the spinner
+    return m, tea.Batch(cmd, m.spinner.Tick, m.stopwatch.Reset(), m.stopwatch.Start())
 }
 ```
 
-**3. The spinner ticks update the animation:**
+The `tea.Batch` starts the git command, the spinner animation, and the elapsed stopwatch all concurrently. The `spinner` and `stopwatch` are components from the `charmbracelet/bubbles` library — they manage their own internal tick messages.
+
+**3. The spinner and stopwatch update themselves:**
 ```go
-case tickMsg:
-    if m.state == stateLoading || m.state == stateProcessing {
-        m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
-        return m, tick()    // Keep ticking
-    }
-    return m, nil           // Stop ticking when no longer in a loading state
+// After the type switch in Update, route messages to sub-components:
+if m.state == stateLoading || m.state == stateProcessing {
+    var cmd tea.Cmd
+    var cmds []tea.Cmd
+    m.spinner, cmd = m.spinner.Update(msg)
+    cmds = append(cmds, cmd)
+    m.stopwatch, cmd = m.stopwatch.Update(msg)
+    cmds = append(cmds, cmd)
+    return m, tea.Batch(cmds...)
+}
 ```
+
+Unlike the old hand-rolled approach (manual tick messages, frame counters), the bubbles components handle their own timing internally. You just route unhandled messages to them when in an async state.
 
 **4. The async result arrives:**
 ```go
@@ -48,15 +54,28 @@ case checkoutResultMsg:
 
 ---
 
-## The Spinner
+## The Spinner and Stopwatch
 
-The spinner is a manual animation using Unicode braille characters:
+Both are initialized in `New()`:
 
 ```go
-var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+s := spinner.New()
+s.Spinner = spinner.MiniDot       // Braille dot animation
+s.Style = styles.Selected         // Purple bold
+
+sw := stopwatch.NewWithInterval(100 * time.Millisecond)  // Updates 10x/sec
 ```
 
-Each `tickMsg` (every 100ms) advances to the next frame. This is a simpler alternative to using the `spinner` component from the `bubbles` library.
+In `View()`, rendering is straightforward:
+
+```go
+case stateLoading:
+    elapsed := fmt.Sprintf("%.2fs", m.stopwatch.Elapsed().Seconds())
+    content = m.spinner.View() + " " + styles.Dimmed.Render(m.processingMsg) +
+        "  " + styles.Subtitle.Render(elapsed)
+```
+
+`m.spinner.View()` returns the current animation frame. `m.stopwatch.Elapsed()` returns the `time.Duration` since the stopwatch was last started.
 
 ---
 
@@ -89,7 +108,7 @@ In `View`, the splash takes over the entire display:
 if m.errSplash != "" {
     content := styles.Title.Render("Error") + "\n\n"
     content += styles.Err.Render(m.errSplash) + "\n"
-    content += "\n" + styles.Help.Render("any key to dismiss")
+    content += "\n" + m.help.View(dismissKeys)
     return styles.Box.BorderForeground(styles.Red).Render(content)
 }
 ```

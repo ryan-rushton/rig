@@ -16,8 +16,9 @@ type Model struct {
     result        string
     errSplash     string
     confirmIdx    int
-    startedAt     time.Time
-    spinnerFrame  int
+    spinner       spinner.Model      // From charmbracelet/bubbles
+    stopwatch     stopwatch.Model    // From charmbracelet/bubbles
+    help          help.Model         // From charmbracelet/bubbles
     processingMsg string
     deleteStaged    bool
     deleteStagedIdx int
@@ -26,7 +27,7 @@ type Model struct {
 
 Key observations:
 - All fields are **lowercase** (unexported) — only code within the `gitbranch` package can access them directly
-- `textinput.Model` is a struct from another package embedded as a field
+- `textinput.Model`, `spinner.Model`, `stopwatch.Model`, and `help.Model` are structs from the `charmbracelet/bubbles` library embedded as fields
 - `[]Branch` is a **slice** (dynamic array) of Branch structs
 
 ## Custom Types
@@ -87,10 +88,9 @@ Both `GoRunner` and `BazelRunner` structs implement all four methods, so they bo
 ### Regular Functions
 
 ```go
-func tick() tea.Cmd {
-    return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
-        return tickMsg(t)
-    })
+func fetchBranches() tea.Msg {
+    branches, err := getBranches()
+    return branchesLoadedMsg{branches: branches, err: err}
 }
 ```
 
@@ -128,9 +128,7 @@ Some functions are deliberately **not** methods. `startAsync` is a great example
 func startAsync(m Model, state viewState, label string, cmd tea.Cmd) (Model, tea.Cmd) {
     m.state = state
     m.processingMsg = label
-    m.startedAt = time.Now()
-    m.spinnerFrame = 0
-    return m, tea.Batch(cmd, tick())
+    return m, tea.Batch(cmd, m.spinner.Tick, m.stopwatch.Reset(), m.stopwatch.Start())
 }
 ```
 
@@ -236,21 +234,31 @@ Type switches check the dynamic type of an interface value. This is how Bubble T
 ```go
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     switch msg := msg.(type) {     // msg is REBOUND to its concrete type in each case
-    case tickMsg:
-        // msg is now type tickMsg, not tea.Msg
-        m.spinnerFrame = (m.spinnerFrame + 1) % len(spinnerFrames)
-        return m, tick()
-
     case branchesLoadedMsg:
         // msg is now type branchesLoadedMsg — you can access msg.branches, msg.err
         if msg.err != nil {
             m = showError(m, msg.err)
+        } else {
+            m.state = stateBrowse
+            m.branches = msg.branches
         }
 
     case tea.KeyMsg:
         // msg is now type tea.KeyMsg — you can call msg.String()
         return m.handleKey(msg)
     }
+
+    // Route spinner and stopwatch messages when in async states.
+    if m.state == stateLoading || m.state == stateProcessing {
+        var cmd tea.Cmd
+        var cmds []tea.Cmd
+        m.spinner, cmd = m.spinner.Update(msg)
+        cmds = append(cmds, cmd)
+        m.stopwatch, cmd = m.stopwatch.Update(msg)
+        cmds = append(cmds, cmd)
+        return m, tea.Batch(cmds...)
+    }
+
     return m, nil
 }
 ```
@@ -422,7 +430,7 @@ func fetchBranches() tea.Msg {
 
 // In Init():
 func (m Model) Init() tea.Cmd {
-    return tea.Batch(fetchBranches, tick())    // Run both concurrently
+    return tea.Batch(fetchBranches, m.spinner.Tick, m.stopwatch.Start())
 }
 ```
 
@@ -431,10 +439,10 @@ func (m Model) Init() tea.Cmd {
 `tea.Batch` runs multiple commands concurrently:
 
 ```go
-return m, tea.Batch(cmd, tick())
+return m, tea.Batch(cmd, m.spinner.Tick, m.stopwatch.Reset(), m.stopwatch.Start())
 ```
 
-This starts both the git command and the spinner ticker at the same time. Results arrive independently as messages to `Update`.
+This starts the git command, the spinner animation, and the stopwatch all at the same time. Results arrive independently as messages to `Update`.
 
 ---
 

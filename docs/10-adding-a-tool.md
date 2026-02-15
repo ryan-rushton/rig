@@ -8,7 +8,10 @@ This ties together most concepts from the other guides. To add a new tool:
 package mytool
 
 import (
+    "github.com/charmbracelet/bubbles/help"
+    "github.com/charmbracelet/bubbles/key"
     tea "github.com/charmbracelet/bubbletea"
+    "github.com/charmbracelet/lipgloss"
 
     "github.com/ryan-rushton/rig/internal/messages"
     "github.com/ryan-rushton/rig/internal/registry"
@@ -24,12 +27,29 @@ func init() {
     })
 }
 
+type keyMap struct {
+    bindings []key.Binding
+}
+
+func (k keyMap) ShortHelp() []key.Binding  { return k.bindings }
+func (k keyMap) FullHelp() [][]key.Binding { return nil }
+
+var defaultKeys = keyMap{bindings: []key.Binding{
+    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc/q", "back")),
+}}
+
 type Model struct {
+    help help.Model
     // your state here
 }
 
 func New() Model {
-    return Model{}
+    h := help.New()
+    h.Styles.ShortKey = lipgloss.NewStyle().Foreground(styles.DimGray).Italic(true).Bold(true)
+    h.Styles.ShortDesc = styles.Help
+    h.Styles.ShortSeparator = styles.Help
+
+    return Model{help: h}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -52,7 +72,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
     content := styles.Title.Render("My Tool") + "\n\n"
     content += "Hello, world!\n"
-    content += "\n" + styles.Help.Render("esc/q back")
+    content += "\n" + m.help.View(defaultKeys)
     return styles.Box.Render(content)
 }
 ```

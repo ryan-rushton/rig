@@ -14,7 +14,7 @@ This guide teaches Go fundamentals and the Bubble Tea TUI framework using the ri
 3. **[The Elm Architecture](docs/03-bubble-tea-architecture.md)** — the Model-Update-View loop and the `tea.Model` interface
 4. **[Messages and Commands](docs/04-messages-and-commands.md)** — how events flow and async work is triggered
 5. **[Composing Models](docs/05-composing-models.md)** — parent-child delegation, the standalone wrapper, and embedded components
-6. **[Async Operations](docs/06-async-operations.md)** — the startAsync pattern, spinners, and the error splash overlay
+6. **[Async Operations](docs/06-async-operations.md)** — the startAsync pattern, bubbles spinner/stopwatch components, and the error splash overlay
 
 ### Supporting Tools
 

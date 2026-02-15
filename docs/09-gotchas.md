@@ -20,7 +20,7 @@ This is correct. The framework takes your returned copy and uses it going forwar
 // BAD — pointer method modifies the original while Go evaluates the return
 func (m *Model) badStartAsync(cmd tea.Cmd) tea.Cmd {
     m.state = stateProcessing
-    return tea.Batch(cmd, tick())
+    return tea.Batch(cmd, m.spinner.Tick)
 }
 
 // This is buggy:
@@ -35,7 +35,7 @@ That's why `startAsync` is a free function:
 // GOOD — free function, no pointer confusion
 func startAsync(m Model, state viewState, label string, cmd tea.Cmd) (Model, tea.Cmd) {
     m.state = state
-    return m, tea.Batch(cmd, tick())
+    return m, tea.Batch(cmd, m.spinner.Tick, m.stopwatch.Reset(), m.stopwatch.Start())
 }
 
 // Clean usage:

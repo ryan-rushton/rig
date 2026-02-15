@@ -73,19 +73,32 @@ This is the **decorator pattern** — it wraps a model and changes one behaviour
 
 ## Embedded Components
 
-The git branch tool uses a `textinput.Model` from the `bubbles` library:
+The tools use several components from the `charmbracelet/bubbles` library:
 
 ```go
 type Model struct {
     // ...
-    input textinput.Model    // Text input component from charmbracelet/bubbles
+    input     textinput.Model    // Text input for renaming/creating
+    spinner   spinner.Model      // Animated loading indicator
+    stopwatch stopwatch.Model    // Elapsed time tracking
+    help      help.Model         // Formatted help text from key bindings
 }
+```
 
+Each component follows the same pattern — initialize in `New()`, route messages through `Update()`, render with `View()`:
+
+```go
 func New() Model {
     ti := textinput.New()
     ti.CharLimit = 200
-    ti.Width = 50
-    return Model{input: ti}
+
+    s := spinner.New()
+    s.Spinner = spinner.MiniDot
+    s.Style = styles.Selected
+
+    sw := stopwatch.NewWithInterval(100 * time.Millisecond)
+
+    return Model{input: ti, spinner: s, stopwatch: sw}
 }
 ```
 
@@ -104,6 +117,20 @@ case stateEdit:
         m.input, inputCmd = m.input.Update(msg)
         return m, inputCmd
     }
+```
+
+For the spinner and stopwatch, messages are routed after the type switch when in async states:
+
+```go
+if m.state == stateLoading || m.state == stateProcessing {
+    var cmd tea.Cmd
+    var cmds []tea.Cmd
+    m.spinner, cmd = m.spinner.Update(msg)
+    cmds = append(cmds, cmd)
+    m.stopwatch, cmd = m.stopwatch.Update(msg)
+    cmds = append(cmds, cmd)
+    return m, tea.Batch(cmds...)
+}
 ```
 
 Notice the pattern: intercept special keys (`enter`, `esc`), and delegate everything else to the sub-component. The sub-component returns an updated copy and possibly a command.
