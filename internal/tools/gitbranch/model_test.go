@@ -677,14 +677,13 @@ func TestShowError_SetsSplash(t *testing.T) {
 // Quit behaviour
 // ---------------------------------------------------------------------------
 
-func TestBrowse_CtrlC_Quits(t *testing.T) {
+func TestBrowse_CtrlC_NoOp(t *testing.T) {
 	m := modelWithBranches(testBranches)
 
+	// ctrl+c is handled at the app level, not the tool level.
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
-
-	// tea.Quit is a function; the only way to check is that cmd is non-nil.
-	if cmd == nil {
-		t.Error("expected quit cmd on ctrl+c")
+	if cmd != nil {
+		t.Error("expected nil cmd — ctrl+c should be handled by the app, not the tool")
 	}
 }
 

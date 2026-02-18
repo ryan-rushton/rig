@@ -1,24 +1,20 @@
 package testchanged
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 )
 
 // detectDefaultBranch returns the default branch name (e.g. "main" or "master")
-// by inspecting the remote HEAD symbolic ref.
+// by checking which common default branches exist locally as remote-tracking refs.
 func detectDefaultBranch() (string, error) {
-	out, err := exec.Command("git", "symbolic-ref", "refs/remotes/origin/HEAD").Output()
-	if err != nil {
-		return "", err
+	for _, branch := range []string{"main", "master"} {
+		if exec.Command("git", "rev-parse", "--verify", "origin/"+branch).Run() == nil {
+			return branch, nil
+		}
 	}
-	// "refs/remotes/origin/main" → "main"
-	ref := strings.TrimSpace(string(out))
-	parts := strings.SplitN(ref, "refs/remotes/origin/", 2)
-	if len(parts) == 2 {
-		return parts[1], nil
-	}
-	return ref, nil
+	return "", fmt.Errorf("could not find origin/main or origin/master")
 }
 
 // mergeBase returns the best common ancestor between HEAD and the given branch.

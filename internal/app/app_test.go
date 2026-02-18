@@ -3,6 +3,8 @@ package app
 import (
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/ryan-rushton/rig/internal/home"
 	"github.com/ryan-rushton/rig/internal/messages"
 	"github.com/ryan-rushton/rig/internal/tools/gitbranch"
@@ -35,6 +37,20 @@ func TestToolSelected_UnknownID_NoTransition(t *testing.T) {
 
 	if _, ok := got.current.(home.Model); !ok {
 		t.Errorf("expected to stay on home screen for unknown tool, got %T", got.current)
+	}
+}
+
+func TestCtrlC_Quits(t *testing.T) {
+	m := New("dev")
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for quit")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Errorf("expected tea.QuitMsg, got %T", msg)
 	}
 }
 

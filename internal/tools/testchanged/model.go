@@ -296,10 +296,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.state {
+	case stateLoading:
+		switch msg.String() {
+		case "q", "esc":
+			return m, func() tea.Msg { return messages.BackMsg{} }
+		}
+
 	case stateBrowse:
 		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
 		case "q", "esc":
 			return m, func() tea.Msg { return messages.BackMsg{} }
 		case "up", "k":
@@ -331,14 +335,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case stateRunning:
-		if msg.String() == "ctrl+c" {
-			return m, tea.Quit
-		}
+		// No tool-level keys during test execution; ctrl+c handled at app level.
 
 	case stateResults:
 		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
 		case "q", "esc":
 			return m, func() tea.Msg { return messages.BackMsg{} }
 		case "r":

@@ -61,12 +61,13 @@ func TestSpace_SelectsTool(t *testing.T) {
 	}
 }
 
-func TestQuit_CtrlC(t *testing.T) {
+func TestCtrlC_NoOp(t *testing.T) {
 	m := New("dev")
 
+	// ctrl+c is handled at the app level, not individual screens.
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
-	if cmd == nil {
-		t.Error("expected quit cmd on ctrl+c")
+	if cmd != nil {
+		t.Error("expected nil cmd — ctrl+c should be handled by the app, not the home screen")
 	}
 }
 

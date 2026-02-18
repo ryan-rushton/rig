@@ -59,9 +59,8 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     switch msg := msg.(type) {
     case tea.KeyMsg:
+        // ctrl+c is handled at the app level — no need to handle it here.
         switch msg.String() {
-        case "ctrl+c":
-            return m, tea.Quit
         case "q", "esc":
             return m, func() tea.Msg { return messages.BackMsg{} }
         }

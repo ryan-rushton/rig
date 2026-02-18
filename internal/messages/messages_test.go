@@ -32,6 +32,21 @@ func TestStandalone_BackMsg_Quits(t *testing.T) {
 	}
 }
 
+func TestStandalone_CtrlC_Quits(t *testing.T) {
+	inner := mockModel{viewString: "inner"}
+	s := Standalone(inner)
+
+	_, cmd := s.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for quit")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); !ok {
+		t.Errorf("expected tea.QuitMsg, got %T", msg)
+	}
+}
+
 func TestStandalone_OtherMsg_Delegates(t *testing.T) {
 	inner := mockModel{viewString: "inner"}
 	s := Standalone(inner)

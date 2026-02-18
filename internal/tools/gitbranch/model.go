@@ -276,8 +276,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
 		case "q", "esc":
 			return m, func() tea.Msg { return messages.BackMsg{} }
 		case "up", "k":
@@ -330,8 +328,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case stateEdit:
 		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
 		case "esc":
 			m.state = stateBrowse
 			m.input.Blur()
@@ -357,8 +353,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case stateCreate:
 		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
 		case "esc":
 			m.state = stateBrowse
 			m.input.Blur()
@@ -377,8 +371,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case stateConfirmRemote:
 		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
 		case "esc":
 			m.state = stateBrowse
 			return m, nil
@@ -406,8 +398,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case stateResult:
 		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
 		case "q", "esc":
 			return m, func() tea.Msg { return messages.BackMsg{} }
 		default:

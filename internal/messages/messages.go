@@ -36,6 +36,9 @@ func (s standalone) Init() tea.Cmd {
 }
 
 func (s standalone) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
+		return s, tea.Quit
+	}
 	if _, ok := msg.(BackMsg); ok {
 		return s, tea.Quit
 	}

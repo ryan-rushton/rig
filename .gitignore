@@ -34,3 +34,6 @@ dist/
 # Editor/IDE
 # .idea/
 # .vscode/
+
+**/*.local.json
+**/*.local.md

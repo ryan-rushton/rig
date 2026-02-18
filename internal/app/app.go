@@ -31,6 +31,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.windowSize = ws
 	}
 
+	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+
 	switch msg := msg.(type) {
 	case messages.BackMsg:
 		h := home.New(m.version)
