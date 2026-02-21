@@ -84,7 +84,7 @@ func (BazelRunner) FindTargets(files []string) []string {
 	}
 
 	var targets []string
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			targets = append(targets, line)

@@ -84,20 +84,23 @@ type discoveredTarget struct {
 
 // Model is the test-changed TUI model.
 type Model struct {
-	state      viewState
-	targets    []discoveredTarget
-	cursor     int
-	output     []string
-	maxOutput  int
-	viewport   viewport.Model
-	errSplash  string
-	spinner    spinner.Model
-	stopwatch  stopwatch.Model
-	help       help.Model
-	loadingMsg string
-	exitCode   int
-	runnerName string
-	finishedIn time.Duration
+	state           viewState
+	targets         []discoveredTarget
+	cursor          int
+	output          []string
+	maxOutput       int
+	browseViewport  viewport.Model
+	resultsViewport viewport.Model
+	errSplash       string
+	spinner         spinner.Model
+	stopwatch       stopwatch.Model
+	help            help.Model
+	loadingMsg      string
+	exitCode        int
+	runnerName      string
+	finishedIn      time.Duration
+	width           int
+	height          int
 }
 
 func New() Model {
@@ -107,7 +110,10 @@ func New() Model {
 
 	sw := stopwatch.NewWithInterval(100 * time.Millisecond)
 
-	vp := viewport.New(80, 30)
+	rvp := viewport.New(80, 30)
+
+	bvp := viewport.New(80, 20)
+	bvp.KeyMap = viewport.KeyMap{}
 
 	h := help.New()
 	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(styles.DimGray).Italic(true).Bold(true)
@@ -115,13 +121,14 @@ func New() Model {
 	h.Styles.ShortSeparator = styles.Help
 
 	return Model{
-		state:      stateLoading,
-		maxOutput:  500,
-		spinner:    s,
-		stopwatch:  sw,
-		viewport:   vp,
-		help:       h,
-		loadingMsg: "Detecting default branch...",
+		state:           stateLoading,
+		maxOutput:       500,
+		spinner:         s,
+		stopwatch:       sw,
+		browseViewport:  bvp,
+		resultsViewport: rvp,
+		help:            h,
+		loadingMsg:      "Detecting default branch...",
 	}
 }
 
@@ -234,10 +241,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		// Reserve space for the header (status line + blank line) and footer (help line).
-		headerHeight := 4
-		m.viewport.Width = msg.Width - 6 // account for box border + padding
-		m.viewport.Height = msg.Height - headerHeight - 6
+		m.width = msg.Width
+		m.height = msg.Height
+		hPad := 6 // border(2) + padding(4) horizontal
+		// Results viewport: header(2 lines) + border/padding(4) + help+scroll(3)
+		m.resultsViewport.Width = msg.Width - hPad
+		m.resultsViewport.Height = msg.Height - 9
+		// Browse viewport: title+blank(2) + subtitle+blank(2) + border/padding(4) + help+blank(2)
+		m.browseViewport.Width = msg.Width - hPad
+		m.browseViewport.Height = msg.Height - 10
 		return m, nil
 
 	case targetsLoadedMsg:
@@ -265,8 +277,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.exitCode = 0
 		}
-		m.viewport.SetContent(colorizeOutput(m.output))
-		m.viewport.GotoBottom()
+		m.resultsViewport.SetContent(colorizeOutput(m.output))
+		m.resultsViewport.GotoBottom()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -276,7 +288,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Route viewport messages when viewing results.
 	if m.state == stateResults {
 		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
+		m.resultsViewport, cmd = m.resultsViewport.Update(msg)
 		return m, cmd
 	}
 
@@ -309,10 +321,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				ensureCursorVisible(&m.browseViewport, browseViewportLine(m.cursor))
 			}
 		case "down", "j":
 			if m.cursor < len(m.targets)-1 {
 				m.cursor++
+				ensureCursorVisible(&m.browseViewport, browseViewportLine(m.cursor))
 			}
 		case "enter":
 			if len(m.targets) > 0 {
@@ -348,12 +362,29 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return startAsync(m, stateLoading, "Detecting default branch...", loadTargets)
 		default:
 			var cmd tea.Cmd
-			m.viewport, cmd = m.viewport.Update(msg)
+			m.resultsViewport, cmd = m.resultsViewport.Update(msg)
 			return m, cmd
 		}
 	}
 
 	return m, nil
+}
+
+// browseViewportLine maps a cursor index to a viewport line,
+// accounting for the blank line after the "All" entry at index 0.
+func browseViewportLine(cursor int) int {
+	if cursor > 0 {
+		return cursor + 1
+	}
+	return cursor
+}
+
+func ensureCursorVisible(vp *viewport.Model, cursor int) {
+	if cursor < vp.YOffset {
+		vp.SetYOffset(cursor)
+	} else if cursor >= vp.YOffset+vp.Height {
+		vp.SetYOffset(cursor - vp.Height + 1)
+	}
 }
 
 const tailLines = 30
@@ -412,6 +443,7 @@ func (m Model) View() string {
 				fmt.Sprintf("Found %d target(s) via %s runner:", realCount, m.runnerName),
 			) + "\n\n"
 
+			var listContent strings.Builder
 			for i, t := range m.targets {
 				cursor := "  "
 				nameStyle := styles.Dimmed
@@ -419,10 +451,22 @@ func (m Model) View() string {
 					cursor = styles.Selected.Render("> ")
 					nameStyle = styles.Selected
 				}
-				content += cursor + nameStyle.Render(t.target) + "\n"
-				if i == 0 {
-					content += "\n"
+				listContent.WriteString(cursor + nameStyle.Render(t.target))
+				if i < len(m.targets)-1 {
+					listContent.WriteByte('\n')
 				}
+				if i == 0 {
+					listContent.WriteByte('\n')
+				}
+			}
+
+			m.browseViewport.SetContent(listContent.String())
+			content += m.browseViewport.View()
+
+			if len(m.targets) > m.browseViewport.Height {
+				content += "\n" + styles.Dimmed.Render(
+					fmt.Sprintf("(%d%% — ↑↓/jk to scroll)", int(m.browseViewport.ScrollPercent()*100)),
+				)
 			}
 
 			content += "\n" + m.help.View(browseKeys)
@@ -435,10 +479,7 @@ func (m Model) View() string {
 
 		// Show tail of output collected so far.
 		if len(m.output) > 0 {
-			start := len(m.output) - tailLines
-			if start < 0 {
-				start = 0
-			}
+			start := max(len(m.output)-tailLines, 0)
 			for _, line := range m.output[start:] {
 				content += line + "\n"
 			}
@@ -454,11 +495,11 @@ func (m Model) View() string {
 				styles.Subtitle.Render(elapsed) + "\n\n"
 		}
 
-		content += m.viewport.View()
+		content += m.resultsViewport.View()
 
-		if len(m.output) > m.viewport.Height {
+		if len(m.output) > m.resultsViewport.Height {
 			content += "\n" + styles.Dimmed.Render(
-				fmt.Sprintf("(%d%% — ↑↓/jk to scroll)", int(m.viewport.ScrollPercent()*100)),
+				fmt.Sprintf("(%d%% — ↑↓/jk to scroll)", int(m.resultsViewport.ScrollPercent()*100)),
 			)
 		}
 

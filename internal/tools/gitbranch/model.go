@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/stopwatch"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -111,6 +112,9 @@ type Model struct {
 	stopwatch     stopwatch.Model
 	help          help.Model
 	processingMsg string
+	viewport      viewport.Model
+	width         int
+	height        int
 	// delete staging — first d marks, second d confirms
 	deleteStaged    bool
 	deleteStagedIdx int
@@ -132,12 +136,16 @@ func New() Model {
 	h.Styles.ShortDesc = styles.Help
 	h.Styles.ShortSeparator = styles.Help
 
+	vp := viewport.New(80, 20)
+	vp.KeyMap = viewport.KeyMap{}
+
 	return Model{
 		state:     stateLoading,
 		input:     ti,
 		spinner:   s,
 		stopwatch: sw,
 		help:      h,
+		viewport:  vp,
 	}
 }
 
@@ -176,6 +184,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		// border(2) + padding(2) horizontal on each side
+		m.viewport.Width = msg.Width - 6
+		// border(2) + padding(2) + title+blank(2) + help+blank(2) = 8
+		m.viewport.Height = msg.Height - 8
+		return m, nil
+
 	case branchesLoadedMsg:
 		if msg.err != nil {
 			m = showError(m, msg.err)
@@ -281,10 +298,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				ensureCursorVisible(&m.viewport, m.cursor)
 			}
 		case "down", "j":
 			if m.cursor < len(m.branches)-1 {
 				m.cursor++
+				ensureCursorVisible(&m.viewport, m.cursor)
 			}
 		case "enter":
 			if len(m.branches) > 0 {
@@ -457,13 +476,21 @@ func (m Model) cmdCreate(name string) tea.Cmd {
 	}
 }
 
+func ensureCursorVisible(vp *viewport.Model, cursor int) {
+	if cursor < vp.YOffset {
+		vp.SetYOffset(cursor)
+	} else if cursor >= vp.YOffset+vp.Height {
+		vp.SetYOffset(cursor - vp.Height + 1)
+	}
+}
+
 // splitUpstream splits "origin/feature/foo" into ("origin", "feature/foo").
 func splitUpstream(upstream string) (remote, branch string) {
-	idx := strings.Index(upstream, "/")
-	if idx < 0 {
+	before, after, ok := strings.Cut(upstream, "/")
+	if !ok {
 		return upstream, upstream
 	}
-	return upstream[:idx], upstream[idx+1:]
+	return before, after
 }
 
 func (m Model) View() string {
@@ -491,6 +518,7 @@ func (m Model) View() string {
 		if len(m.branches) == 0 {
 			content += styles.Dimmed.Render("No branches found.")
 		} else {
+			var listContent strings.Builder
 			for i, b := range m.branches {
 				cursor := "  "
 				nameStyle := lipgloss.NewStyle()
@@ -522,12 +550,24 @@ func (m Model) View() string {
 					remote = "  " + styles.Remote.Render("["+b.Upstream+"]")
 				}
 
-				content += fmt.Sprintf("%s%s%s%s%s\n",
+				listContent.WriteString(fmt.Sprintf("%s%s%s%s%s",
 					cursor,
 					prefix,
 					nameStyle.Render(fmt.Sprintf("%-40s", b.Name)),
 					remote,
 					deleteMarker,
+				))
+				if i < len(m.branches)-1 {
+					listContent.WriteByte('\n')
+				}
+			}
+
+			m.viewport.SetContent(listContent.String())
+			content += m.viewport.View()
+
+			if len(m.branches) > m.viewport.Height {
+				content += "\n" + styles.Dimmed.Render(
+					fmt.Sprintf("(%d%% — ↑↓/jk to scroll)", int(m.viewport.ScrollPercent()*100)),
 				)
 			}
 		}

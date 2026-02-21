@@ -2,9 +2,11 @@ package home
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -45,6 +47,9 @@ type Model struct {
 	updateErr string
 	help      help.Model
 	keys      keyMap
+	viewport  viewport.Model
+	width     int
+	height    int
 }
 
 func New(version string) Model {
@@ -53,10 +58,14 @@ func New(version string) Model {
 	h.Styles.ShortDesc = styles.Help
 	h.Styles.ShortSeparator = styles.Help
 
+	vp := viewport.New(80, 20)
+	vp.KeyMap = viewport.KeyMap{}
+
 	return Model{
-		version: version,
-		help:    h,
-		keys:    newKeys(),
+		version:  version,
+		help:     h,
+		keys:     newKeys(),
+		viewport: vp,
 	}
 }
 
@@ -86,6 +95,13 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.viewport.Width = msg.Width - 6  // border(2) + padding(4)
+		m.viewport.Height = msg.Height - 10 // border(2) + padding(2) + banner(4) + help+blank(2)
+		return m, nil
+
 	case messages.UpdateAvailableMsg:
 		m.updateTag = msg.Tag
 		m.keys.Update.SetEnabled(true)
@@ -114,10 +130,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				ensureCursorVisible(&m.viewport, m.cursor)
 			}
 		case "down", "j":
 			if m.cursor < len(registry.All())-1 {
 				m.cursor++
+				ensureCursorVisible(&m.viewport, m.cursor)
 			}
 		case "enter", " ":
 			all := registry.All()
@@ -130,6 +148,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func ensureCursorVisible(vp *viewport.Model, cursor int) {
+	if cursor < vp.YOffset {
+		vp.SetYOffset(cursor)
+	} else if cursor >= vp.YOffset+vp.Height {
+		vp.SetYOffset(cursor - vp.Height + 1)
+	}
 }
 
 func (m Model) View() string {
@@ -151,7 +177,9 @@ func (m Model) View() string {
 		) + "\n\n"
 	}
 
-	for i, t := range registry.All() {
+	all := registry.All()
+	var listContent strings.Builder
+	for i, t := range all {
 		cursor := "  "
 		nameStyle := lipgloss.NewStyle()
 		descStyle := styles.Dimmed
@@ -163,10 +191,22 @@ func (m Model) View() string {
 		}
 
 		paddedName := fmt.Sprintf("%-22s", t.Name)
-		content += fmt.Sprintf("%s%s %s\n",
+		listContent.WriteString(fmt.Sprintf("%s%s %s",
 			cursor,
 			nameStyle.Render(paddedName),
 			descStyle.Render(t.Description),
+		))
+		if i < len(all)-1 {
+			listContent.WriteByte('\n')
+		}
+	}
+
+	m.viewport.SetContent(listContent.String())
+	content += m.viewport.View()
+
+	if len(all) > m.viewport.Height {
+		content += "\n" + styles.Dimmed.Render(
+			fmt.Sprintf("(%d%% — ↑↓/jk to scroll)", int(m.viewport.ScrollPercent()*100)),
 		)
 	}
 
