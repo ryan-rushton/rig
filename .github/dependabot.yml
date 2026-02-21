@@ -4,6 +4,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    allow:
+      - dependency-type: all
     commit-message:
       prefix: "deps"
 
