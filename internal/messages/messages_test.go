@@ -3,7 +3,7 @@ package messages
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // mockModel is a minimal tea.Model for testing the Standalone wrapper.
@@ -14,7 +14,7 @@ type mockModel struct {
 
 func (m mockModel) Init() tea.Cmd                           { return nil }
 func (m mockModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) { m.lastMsg = msg; return m, nil }
-func (m mockModel) View() string                            { return m.viewString }
+func (m mockModel) View() tea.View                          { return tea.NewView(m.viewString) }
 
 func TestStandalone_BackMsg_Quits(t *testing.T) {
 	inner := mockModel{viewString: "inner"}
@@ -36,7 +36,7 @@ func TestStandalone_CtrlC_Quits(t *testing.T) {
 	inner := mockModel{viewString: "inner"}
 	s := Standalone(inner)
 
-	_, cmd := s.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, cmd := s.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd for quit")
@@ -72,8 +72,9 @@ func TestStandalone_View_Delegates(t *testing.T) {
 	inner := mockModel{viewString: "hello"}
 	s := Standalone(inner)
 
-	if got := s.View(); got != "hello" {
-		t.Errorf("expected 'hello', got %q", got)
+	v := s.View()
+	if v.Content != "hello" {
+		t.Errorf("expected 'hello', got %q", v.Content)
 	}
 }
 

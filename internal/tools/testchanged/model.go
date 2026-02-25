@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/stopwatch"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/stopwatch"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/ryan-rushton/rig/internal/messages"
 	"github.com/ryan-rushton/rig/internal/registry"
@@ -108,11 +108,11 @@ func New() Model {
 	s.Spinner = spinner.MiniDot
 	s.Style = styles.Selected
 
-	sw := stopwatch.NewWithInterval(100 * time.Millisecond)
+	sw := stopwatch.New(stopwatch.WithInterval(100 * time.Millisecond))
 
-	rvp := viewport.New(80, 30)
+	rvp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(30))
 
-	bvp := viewport.New(80, 20)
+	bvp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(20))
 	bvp.KeyMap = viewport.KeyMap{}
 
 	h := help.New()
@@ -233,7 +233,7 @@ func streamLines(runner string, targets []string) tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Error splash intercepts all key presses and clears itself.
 	if m.errSplash != "" {
-		if _, ok := msg.(tea.KeyMsg); ok {
+		if _, ok := msg.(tea.KeyPressMsg); ok {
 			m.errSplash = ""
 			return m, nil
 		}
@@ -245,11 +245,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		hPad := 6 // border(2) + padding(4) horizontal
 		// Results viewport: header(2 lines) + border/padding(4) + help+scroll(3)
-		m.resultsViewport.Width = msg.Width - hPad
-		m.resultsViewport.Height = msg.Height - 9
+		m.resultsViewport.SetWidth(msg.Width - hPad)
+		m.resultsViewport.SetHeight(msg.Height - 9)
 		// Browse viewport: title+blank(2) + subtitle+blank(2) + border/padding(4) + help+blank(2)
-		m.browseViewport.Width = msg.Width - hPad
-		m.browseViewport.Height = msg.Height - 10
+		m.browseViewport.SetWidth(msg.Width - hPad)
+		m.browseViewport.SetHeight(msg.Height - 10)
 		return m, nil
 
 	case targetsLoadedMsg:
@@ -281,7 +281,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resultsViewport.GotoBottom()
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
 
@@ -306,7 +306,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case stateLoading:
 		switch msg.String() {
@@ -380,10 +380,10 @@ func browseViewportLine(cursor int) int {
 }
 
 func ensureCursorVisible(vp *viewport.Model, cursor int) {
-	if cursor < vp.YOffset {
+	if cursor < vp.YOffset() {
 		vp.SetYOffset(cursor)
-	} else if cursor >= vp.YOffset+vp.Height {
-		vp.SetYOffset(cursor - vp.Height + 1)
+	} else if cursor >= vp.YOffset()+vp.Height() {
+		vp.SetYOffset(cursor - vp.Height() + 1)
 	}
 }
 
@@ -411,15 +411,15 @@ func colorizeOutput(lines []string) string {
 	return b.String()
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	// Error splash takes over the whole view; any key will clear it.
 	if m.errSplash != "" {
 		content := styles.Title.Render("Error") + "\n\n"
 		content += styles.Err.Render(m.errSplash) + "\n"
 		content += "\n" + m.help.View(dismissKeys)
-		return styles.Box.
+		return tea.NewView(styles.Box.
 			BorderForeground(styles.Red).
-			Render(content)
+			Render(content))
 	}
 
 	var content string
@@ -463,7 +463,7 @@ func (m Model) View() string {
 			m.browseViewport.SetContent(listContent.String())
 			content += m.browseViewport.View()
 
-			if len(m.targets) > m.browseViewport.Height {
+			if len(m.targets) > m.browseViewport.Height() {
 				content += "\n" + styles.Dimmed.Render(
 					fmt.Sprintf("(%d%% — ↑↓/jk to scroll)", int(m.browseViewport.ScrollPercent()*100)),
 				)
@@ -497,7 +497,7 @@ func (m Model) View() string {
 
 		content += m.resultsViewport.View()
 
-		if len(m.output) > m.resultsViewport.Height {
+		if len(m.output) > m.resultsViewport.Height() {
 			content += "\n" + styles.Dimmed.Render(
 				fmt.Sprintf("(%d%% — ↑↓/jk to scroll)", int(m.resultsViewport.ScrollPercent()*100)),
 			)
@@ -506,5 +506,5 @@ func (m Model) View() string {
 		content += "\n" + m.help.View(resultsKeys)
 	}
 
-	return styles.Box.Render(content)
+	return tea.NewView(styles.Box.Render(content))
 }

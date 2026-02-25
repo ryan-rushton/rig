@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 
 	"github.com/ryan-rushton/rig/internal/messages"
@@ -15,7 +15,7 @@ func init() {
 		Short:   "Run tests for files changed vs merge base",
 		Long:    "Detect changed files compared to the merge-base with the default branch and run affected tests",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			p := tea.NewProgram(messages.Standalone(testchanged.New()), tea.WithAltScreen())
+			p := tea.NewProgram(messages.Standalone(testchanged.New()))
 			_, err := p.Run()
 			return err
 		},

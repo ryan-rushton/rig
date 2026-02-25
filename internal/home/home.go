@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/ryan-rushton/rig/internal/messages"
 	"github.com/ryan-rushton/rig/internal/registry"
@@ -58,7 +58,7 @@ func New(version string) Model {
 	h.Styles.ShortDesc = styles.Help
 	h.Styles.ShortSeparator = styles.Help
 
-	vp := viewport.New(80, 20)
+	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(20))
 	vp.KeyMap = viewport.KeyMap{}
 
 	return Model{
@@ -98,8 +98,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.viewport.Width = msg.Width - 6    // border(2) + padding(4)
-		m.viewport.Height = msg.Height - 10 // border(2) + padding(2) + banner(4) + help+blank(2)
+		m.viewport.SetWidth(msg.Width - 6)    // border(2) + padding(4)
+		m.viewport.SetHeight(msg.Height - 10) // border(2) + padding(2) + banner(4) + help+blank(2)
 		return m, nil
 
 	case messages.UpdateAvailableMsg:
@@ -116,7 +116,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if msg.String() == "u" && m.updateTag != "" && !m.updating && !m.updated {
 			m.updating = true
 			m.updateErr = ""
@@ -137,7 +137,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 				ensureCursorVisible(&m.viewport, m.cursor)
 			}
-		case "enter", " ":
+		case "enter", "space":
 			all := registry.All()
 			if m.cursor < len(all) {
 				selected := all[m.cursor]
@@ -151,14 +151,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func ensureCursorVisible(vp *viewport.Model, cursor int) {
-	if cursor < vp.YOffset {
+	if cursor < vp.YOffset() {
 		vp.SetYOffset(cursor)
-	} else if cursor >= vp.YOffset+vp.Height {
-		vp.SetYOffset(cursor - vp.Height + 1)
+	} else if cursor >= vp.YOffset()+vp.Height() {
+		vp.SetYOffset(cursor - vp.Height() + 1)
 	}
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	banner := "█▀█ █ █▀▀\n█▀▄ █ █ █\n▀ ▀ ▀ ▀▀▀"
 	content := styles.Title.Render(banner) + "\n"
 	content += styles.Subtitle.Render("Ryan's TUI Toolkit") + "\n\n"
@@ -204,7 +204,7 @@ func (m Model) View() string {
 	m.viewport.SetContent(listContent.String())
 	content += m.viewport.View()
 
-	if len(all) > m.viewport.Height {
+	if len(all) > m.viewport.Height() {
 		content += "\n" + styles.Dimmed.Render(
 			fmt.Sprintf("(%d%% — ↑↓/jk to scroll)", int(m.viewport.ScrollPercent()*100)),
 		)
@@ -212,5 +212,5 @@ func (m Model) View() string {
 
 	content += "\n" + m.help.View(m.keys)
 
-	return styles.Box.Render(content)
+	return tea.NewView(styles.Box.Render(content))
 }

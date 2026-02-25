@@ -1,7 +1,7 @@
 package app
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/ryan-rushton/rig/internal/home"
 	"github.com/ryan-rushton/rig/internal/messages"
@@ -31,7 +31,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.windowSize = ws
 	}
 
-	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
+	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
 		return m, tea.Quit
 	}
 
@@ -54,6 +54,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) View() string {
-	return m.current.View()
+func (m Model) View() tea.View {
+	v := m.current.View()
+	v.AltScreen = true
+	return v
 }

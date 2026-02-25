@@ -5,14 +5,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/stopwatch"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/stopwatch"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/ryan-rushton/rig/internal/messages"
 	"github.com/ryan-rushton/rig/internal/registry"
@@ -123,20 +123,20 @@ type Model struct {
 func New() Model {
 	ti := textinput.New()
 	ti.CharLimit = 200
-	ti.Width = 50
+	ti.SetWidth(50)
 
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 	s.Style = styles.Selected
 
-	sw := stopwatch.NewWithInterval(100 * time.Millisecond)
+	sw := stopwatch.New(stopwatch.WithInterval(100 * time.Millisecond))
 
 	h := help.New()
 	h.Styles.ShortKey = lipgloss.NewStyle().Foreground(styles.DimGray).Italic(true).Bold(true)
 	h.Styles.ShortDesc = styles.Help
 	h.Styles.ShortSeparator = styles.Help
 
-	vp := viewport.New(80, 20)
+	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(20))
 	vp.KeyMap = viewport.KeyMap{}
 
 	return Model{
@@ -177,7 +177,7 @@ func showError(m Model, err error) Model {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Error splash intercepts all key presses and clears itself.
 	if m.errSplash != "" {
-		if _, ok := msg.(tea.KeyMsg); ok {
+		if _, ok := msg.(tea.KeyPressMsg); ok {
 			m.errSplash = ""
 			return m, nil
 		}
@@ -188,9 +188,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		// border(2) + padding(2) horizontal on each side
-		m.viewport.Width = msg.Width - 6
+		m.viewport.SetWidth(msg.Width - 6)
 		// border(2) + padding(2) + title+blank(2) + help+blank(2) = 8
-		m.viewport.Height = msg.Height - 8
+		m.viewport.SetHeight(msg.Height - 8)
 		return m, nil
 
 	case branchesLoadedMsg:
@@ -266,7 +266,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload so the current-branch indicator updates.
 		return startAsync(m, stateLoading, "Loading branches...", fetchBranches)
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
 
@@ -284,7 +284,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case stateBrowse:
 		// Any key other than d clears delete staging.
@@ -405,7 +405,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			newName := strings.TrimSpace(m.input.Value())
 			m.didRemote = false
 			return startAsync(m, stateProcessing, "Renaming branch...", m.cmdRenameLocal(newName))
-		case "enter", " ":
+		case "enter", "space":
 			newName := strings.TrimSpace(m.input.Value())
 			if m.confirmIdx == 0 {
 				m.didRemote = true
@@ -477,10 +477,10 @@ func (m Model) cmdCreate(name string) tea.Cmd {
 }
 
 func ensureCursorVisible(vp *viewport.Model, cursor int) {
-	if cursor < vp.YOffset {
+	if cursor < vp.YOffset() {
 		vp.SetYOffset(cursor)
-	} else if cursor >= vp.YOffset+vp.Height {
-		vp.SetYOffset(cursor - vp.Height + 1)
+	} else if cursor >= vp.YOffset()+vp.Height() {
+		vp.SetYOffset(cursor - vp.Height() + 1)
 	}
 }
 
@@ -493,15 +493,15 @@ func splitUpstream(upstream string) (remote, branch string) {
 	return before, after
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	// Error splash takes over the whole view; any key will clear it.
 	if m.errSplash != "" {
 		content := styles.Title.Render("Error") + "\n\n"
 		content += styles.Err.Render(m.errSplash) + "\n"
 		content += "\n" + m.help.View(dismissKeys)
-		return styles.Box.
+		return tea.NewView(styles.Box.
 			BorderForeground(styles.Red).
-			Render(content)
+			Render(content))
 	}
 
 	var content string
@@ -565,7 +565,7 @@ func (m Model) View() string {
 			m.viewport.SetContent(listContent.String())
 			content += m.viewport.View()
 
-			if len(m.branches) > m.viewport.Height {
+			if len(m.branches) > m.viewport.Height() {
 				content += "\n" + styles.Dimmed.Render(
 					fmt.Sprintf("(%d%% — ↑↓/jk to scroll)", int(m.viewport.ScrollPercent()*100)),
 				)
@@ -631,5 +631,5 @@ func (m Model) View() string {
 		content += "\n" + m.help.View(resultKeys)
 	}
 
-	return styles.Box.Render(content)
+	return tea.NewView(styles.Box.Render(content))
 }

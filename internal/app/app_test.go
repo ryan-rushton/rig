@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/ryan-rushton/rig/internal/home"
 	"github.com/ryan-rushton/rig/internal/messages"
@@ -43,7 +43,7 @@ func TestToolSelected_UnknownID_NoTransition(t *testing.T) {
 func TestCtrlC_Quits(t *testing.T) {
 	m := New("dev")
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd for quit")

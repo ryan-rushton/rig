@@ -1,6 +1,6 @@
 package messages
 
-import tea "github.com/charmbracelet/bubbletea"
+import tea "charm.land/bubbletea/v2"
 
 // BackMsg is sent by tools when they want to return to the home screen.
 type BackMsg struct{}
@@ -36,7 +36,7 @@ func (s standalone) Init() tea.Cmd {
 }
 
 func (s standalone) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
+	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
 		return s, tea.Quit
 	}
 	if _, ok := msg.(BackMsg); ok {
@@ -47,6 +47,8 @@ func (s standalone) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return s, cmd
 }
 
-func (s standalone) View() string {
-	return s.inner.View()
+func (s standalone) View() tea.View {
+	v := s.inner.View()
+	v.AltScreen = true
+	return v
 }

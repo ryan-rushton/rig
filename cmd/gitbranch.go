@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 
 	"github.com/ryan-rushton/rig/internal/messages"
@@ -15,7 +15,7 @@ func init() {
 		Short:   "Edit git branch names",
 		Long:    "Interactive TUI for renaming git branches locally and on remote",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			p := tea.NewProgram(messages.Standalone(gitbranch.New()), tea.WithAltScreen())
+			p := tea.NewProgram(messages.Standalone(gitbranch.New()))
 			_, err := p.Run()
 			return err
 		},

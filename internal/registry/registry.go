@@ -1,6 +1,6 @@
 package registry
 
-import tea "github.com/charmbracelet/bubbletea"
+import tea "charm.land/bubbletea/v2"
 
 // Tool defines a tool that can be launched from the home screen.
 type Tool struct {

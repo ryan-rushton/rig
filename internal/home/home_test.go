@@ -3,14 +3,14 @@ package home
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/ryan-rushton/rig/internal/messages"
-	_ "github.com/ryan-rushton/rig/internal/tools/gitbranch" // registers tool via init()
+	_ "github.com/ryan-rushton/rig/internal/tools/gitbranch"
 )
 
-func keyRune(r rune) tea.KeyMsg        { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
-func keyType(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
+func keyRune(r rune) tea.KeyPressMsg    { return tea.KeyPressMsg{Code: r, Text: string(r)} }
+func keyCode(code rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: code} }
 
 func TestNavigation_BoundsChecking(t *testing.T) {
 	m := New("dev")
@@ -32,7 +32,7 @@ func TestNavigation_BoundsChecking(t *testing.T) {
 func TestEnter_SelectsTool(t *testing.T) {
 	m := New("dev")
 
-	_, cmd := m.Update(keyType(tea.KeyEnter))
+	_, cmd := m.Update(keyCode(tea.KeyEnter))
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd on enter")
 	}
@@ -65,7 +65,7 @@ func TestCtrlC_NoOp(t *testing.T) {
 	m := New("dev")
 
 	// ctrl+c is handled at the app level, not individual screens.
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd != nil {
 		t.Error("expected nil cmd — ctrl+c should be handled by the app, not the home screen")
 	}

@@ -3,14 +3,14 @@ package gitbranch
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/ryan-rushton/rig/internal/messages"
 )
 
 // Key helpers to keep tests readable.
-func keyRune(r rune) tea.KeyMsg        { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
-func keyType(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
+func keyRune(r rune) tea.KeyPressMsg    { return tea.KeyPressMsg{Code: r, Text: string(r)} }
+func keyCode(code rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: code} }
 
 // modelWithBranches returns a Model in stateBrowse with the supplied branches.
 func modelWithBranches(branches []Branch) Model {
@@ -125,14 +125,14 @@ func TestBrowse_CursorNavigation(t *testing.T) {
 	}
 
 	// Arrow keys work too.
-	r, _ = m.Update(keyType(tea.KeyUp))
+	r, _ = m.Update(keyCode(tea.KeyUp))
 	m = r.(Model)
 	if m.cursor != 0 {
 		t.Fatalf("expected cursor=0 after up, got %d", m.cursor)
 	}
 
 	// Can't go above first branch.
-	r, _ = m.Update(keyType(tea.KeyUp))
+	r, _ = m.Update(keyCode(tea.KeyUp))
 	m = r.(Model)
 	if m.cursor != 0 {
 		t.Fatalf("expected cursor to stay at 0, got %d", m.cursor)
@@ -143,7 +143,7 @@ func TestBrowse_EnterOnCurrentBranch_NoOp(t *testing.T) {
 	m := modelWithBranches(testBranches)
 	m.cursor = 0 // main, IsCurrent=true
 
-	r, cmd := m.Update(keyType(tea.KeyEnter))
+	r, cmd := m.Update(keyCode(tea.KeyEnter))
 	got := r.(Model)
 
 	if got.state != stateBrowse {
@@ -158,7 +158,7 @@ func TestBrowse_EnterOnNonCurrentBranch_StartsCheckout(t *testing.T) {
 	m := modelWithBranches(testBranches)
 	m.cursor = 1 // feature/foo
 
-	r, cmd := m.Update(keyType(tea.KeyEnter))
+	r, cmd := m.Update(keyCode(tea.KeyEnter))
 	got := r.(Model)
 
 	if got.state != stateProcessing {
@@ -199,7 +199,7 @@ func TestEdit_EscCancels(t *testing.T) {
 	m.state = stateEdit
 	m.editing = testBranches[1]
 
-	r, _ := m.Update(keyType(tea.KeyEsc))
+	r, _ := m.Update(keyCode(tea.KeyEscape))
 	got := r.(Model)
 
 	if got.state != stateBrowse {
@@ -213,7 +213,7 @@ func TestEdit_EnterWithSameName_Cancels(t *testing.T) {
 	m.editing = testBranches[1]
 	m.input.SetValue("feature/foo")
 
-	r, _ := m.Update(keyType(tea.KeyEnter))
+	r, _ := m.Update(keyCode(tea.KeyEnter))
 	got := r.(Model)
 
 	if got.state != stateBrowse {
@@ -227,7 +227,7 @@ func TestEdit_EnterWithRemote_GoesToConfirm(t *testing.T) {
 	m.editing = testBranches[1] // HasRemote=true
 	m.input.SetValue("feature/bar")
 
-	r, _ := m.Update(keyType(tea.KeyEnter))
+	r, _ := m.Update(keyCode(tea.KeyEnter))
 	got := r.(Model)
 
 	if got.state != stateConfirmRemote {
@@ -241,7 +241,7 @@ func TestEdit_EnterWithoutRemote_StartsRename(t *testing.T) {
 	m.editing = testBranches[2] // local-only, HasRemote=false
 	m.input.SetValue("new-local")
 
-	r, cmd := m.Update(keyType(tea.KeyEnter))
+	r, cmd := m.Update(keyCode(tea.KeyEnter))
 	got := r.(Model)
 
 	if got.state != stateProcessing {
@@ -275,7 +275,7 @@ func TestCreate_EnterWithExistingName_Blocked(t *testing.T) {
 	m.state = stateCreate
 	m.input.SetValue("main") // already exists
 
-	r, cmd := m.Update(keyType(tea.KeyEnter))
+	r, cmd := m.Update(keyCode(tea.KeyEnter))
 	got := r.(Model)
 
 	if got.state != stateCreate {
@@ -291,7 +291,7 @@ func TestCreate_EnterWithEmptyName_Blocked(t *testing.T) {
 	m.state = stateCreate
 	m.input.SetValue("")
 
-	r, cmd := m.Update(keyType(tea.KeyEnter))
+	r, cmd := m.Update(keyCode(tea.KeyEnter))
 	got := r.(Model)
 
 	if got.state != stateCreate {
@@ -307,7 +307,7 @@ func TestCreate_EnterWithNewName_StartsCreate(t *testing.T) {
 	m.state = stateCreate
 	m.input.SetValue("feature/new")
 
-	r, cmd := m.Update(keyType(tea.KeyEnter))
+	r, cmd := m.Update(keyCode(tea.KeyEnter))
 	got := r.(Model)
 
 	if got.state != stateProcessing {
@@ -681,7 +681,7 @@ func TestBrowse_CtrlC_NoOp(t *testing.T) {
 	m := modelWithBranches(testBranches)
 
 	// ctrl+c is handled at the app level, not the tool level.
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd != nil {
 		t.Error("expected nil cmd — ctrl+c should be handled by the app, not the tool")
 	}
